@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - "codex/**"
     paths:
       - ".github/workflows/android-build.yml"
       - "apps/android/**"

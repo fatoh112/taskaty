@@ -4,7 +4,7 @@ This repository is configured for permanent no-cost plans only. Do not attach Cl
 
 ## Public GitHub Actions Android build
 
-`.github/workflows/android-build.yml` runs on manual dispatch, relevant pushes, and pull requests to `main`. It uses the standard `ubuntu-24.04` hosted runner, Java 17, Android SDK API 36, and Flutter stable 3.47.0. GitHub documents standard hosted runners as free on public repositories; this workflow does not use larger runners or a paid build service. The debug APK artifact is retained for 3 days.
+`.github/workflows/android-build.yml` runs on manual dispatch, relevant pushes to `main`, and pull requests to `main`. It uses the standard `ubuntu-24.04` hosted runner, Java 17, Android SDK API 36, and Flutter stable 3.47.0. GitHub documents standard hosted runners as free on public repositories; this workflow does not use larger runners or a paid build service. The debug APK artifact is retained for 3 days.
 
 The workflow always supports a build without a backend URL. Firebase options are already set as repository **Actions variables** (Settings → Secrets and variables → Actions → Variables):
 
