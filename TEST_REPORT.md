@@ -27,9 +27,9 @@ This is a debug APK built without Firebase project values or a deployed Worker U
 | Git whitespace check | PASS | `git diff --check` completed without errors for the latest build and documentation changes. |
 | Flutter/Dart analyzer and tests | PASS (CI) | GitHub Actions installed Flutter 3.47.0. `flutter analyze --no-fatal-infos` and all 12 `flutter test` cases passed. Flutter is not installed in the local Windows environment. |
 | Android debug APK | PASS (CI) | A debug APK was built and uploaded by PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). Release signing is not configured. |
-| Cloudflare Free account/deployment | BLOCKED | No Cloudflare account session or production D1 resource is configured. The local emulator is not a deployed account and does not measure the account's Free CPU/quota behavior. |
+| Cloudflare Free account/deployment | BLOCKED | A read-only Cloudflare connection sees no D1 database for Taskaty and one unrelated Worker. The connection cannot read account subscriptions because it lacks Billing Read scope, so the Free plan cannot be confirmed. No Taskaty resource was created. |
 | Firebase/FCM live configuration | BLOCKED | No Firebase project/app configuration, service-account secret or device registration is available in this checkout. |
-| Cloudflare deployment/Cron observation | BLOCKED | No Cloudflare account session or D1 resource is configured. No Worker was deployed. |
+| Cloudflare deployment/Cron observation | BLOCKED | The account's Free plan cannot be verified with the available OAuth scope. No Taskaty D1 database or Worker was deployed, so production Cron is unobserved. |
 | Physical two-device push acceptance | BLOCKED | Requires a configured Firebase Spark project, Worker deployment and two Android devices with Google Play services. |
 
 ## Acceptance criteria
