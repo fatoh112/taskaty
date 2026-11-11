@@ -104,7 +104,17 @@ class DashboardScreen extends ConsumerWidget {
             data: (d) {
               final upcoming = (d['approaching'] as List? ?? const []).cast<Map<String, dynamic>>().map(TaskItem.fromJson).toList();
               if (upcoming.isEmpty) return Padding(padding: const EdgeInsets.all(20), child: EmptyPanel(icon: Icons.check_circle_outline, title: tr(context, 'مفيش مواعيد قريبة', 'No approaching deadlines'), body: tr(context, 'مفيش مهام مستحقة خلال الساعتين الجايين.', 'Nothing is due in the next two hours.')));
-              return Column(children: upcoming.take(3).map((t) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: TaskCard(task: t, onTap: () => context.push('/task/${t.id}'))))).toList());
+              return Column(
+                children: upcoming.take(3).map((task) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    child: TaskCard(
+                      task: task,
+                      onTap: () => context.push('/task/' + task.id),
+                    ),
+                  );
+                }).toList(),
+              );
             },
           ),
         ])));
@@ -131,7 +141,39 @@ class TeamScreen extends ConsumerWidget {
         ScreenTitle(tr(context, 'الفريق', 'Team'), subtitle: tr(context, 'إدارة أعضاء الفريق والدعوات.', 'Members and invitations.'), trailing: IconButton(onPressed: () => _invite(context, ref, team), icon: const Icon(Icons.person_add_alt_1, color: TaskatyColors.cyan))),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: SelectTeamCard(teams: items)),
         Padding(padding: const EdgeInsets.fromLTRB(20, 20, 20, 8), child: Text('${tr(context, 'الأعضاء', 'Members')} · ${team.name}', style: Theme.of(context).textTheme.titleLarge)),
-        members.when(loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())), error: (e, _) => Padding(padding: const EdgeInsets.all(20), child: ErrorPanel(message: e.toString(), onRetry: () => ref.invalidate(membersProvider(team.id)))), data: (list) => Column(children: list.map((m) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3), child: Card(child: ListTile(leading: CircleAvatar(child: Text(m.name.isNotEmpty ? m.name.characters.first.toUpperCase() : m.email.characters.first.toUpperCase())), title: Text(m.name.isNotEmpty ? m.name : m.email), subtitle: Text(m.email), trailing: Chip(label: Text(_role(context, m.role))))))).toList()),
+        members.when(
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          error: (error, _) => Padding(
+            padding: const EdgeInsets.all(20),
+            child: ErrorPanel(
+              message: error.toString(),
+              onRetry: () => ref.invalidate(membersProvider(team.id)),
+            ),
+          ),
+          data: (list) => Column(
+            children: list.map((member) {
+              final displayName = member.name.isNotEmpty ? member.name : member.email;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
+                child: Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      child: Text(displayName.characters.first.toUpperCase()),
+                    ),
+                    title: Text(displayName),
+                    subtitle: Text(member.email),
+                    trailing: Chip(label: Text(_role(context, member.role))),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
         Padding(padding: const EdgeInsets.all(20), child: OutlinedButton.icon(onPressed: () => _leave(context, ref, team), icon: const Icon(Icons.logout), label: Text(tr(context, 'مغادرة الفريق', 'Leave team')))),
           ]),
         ),
