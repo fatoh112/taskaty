@@ -39,6 +39,10 @@ npm test
 npm run typecheck
 ```
 
+## Android CI artifact
+
+The public GitHub Actions workflow uses a standard `ubuntu-24.04` runner, runs Flutter analysis/tests and Worker checks, builds a debug APK, and retains the artifact for 3 days. Configure the repository Actions variables `TASKPULSE_API_URL`, `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, and `TASKPULSE_FIREBASE_SENDER_ID` for a configured test build. These are client-side Firebase app settings and the public Worker URL; never put a service-account private key or other backend credential in these variables. If unset, the APK shows the setup-required state.
+
 ## Security model
 
 The app sends a Firebase ID token in `Authorization: Bearer …` for every API operation. The Worker validates the RS256 signature and Firebase claims, derives the UID from the verified token, and checks team membership from D1 before reading or changing team data. Task deadlines use Worker server time. Notification history is stored per recipient in D1; FCM is a best-effort delivery channel.

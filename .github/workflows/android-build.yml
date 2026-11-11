@@ -1,0 +1,130 @@
+name: Taskaty Android CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "codex/**"
+    paths:
+      - ".github/workflows/android-build.yml"
+      - "apps/android/**"
+      - "backend/**"
+      - "package.json"
+      - "package-lock.json"
+      - "DEPLOYMENT.md"
+      - "FREE_TIER_AUDIT.md"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android-build.yml"
+      - "apps/android/**"
+      - "backend/**"
+      - "package.json"
+      - "package-lock.json"
+      - "DEPLOYMENT.md"
+      - "FREE_TIER_AUDIT.md"
+
+concurrency:
+  group: taskaty-android-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    name: Analyze, test, and build debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+
+      - name: Install Android platform and build tools
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: "3.47.0"
+
+      - name: Verify toolchain
+        run: |
+          flutter --version
+          java --version
+          sdkmanager --version
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/android
+        run: flutter pub get
+
+      - name: Analyze Flutter source
+        working-directory: apps/android
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: apps/android
+        run: flutter test
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Typecheck Worker
+        run: npm run typecheck:worker
+
+      - name: Run Worker tests
+        run: npm run test:worker
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+
+      - name: Prepare optional public app configuration
+        env:
+          TASKPULSE_API_URL: ${{ vars.TASKPULSE_API_URL }}
+          FIREBASE_API_KEY: ${{ vars.TASKPULSE_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.TASKPULSE_FIREBASE_APP_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.TASKPULSE_FIREBASE_PROJECT_ID }}
+          FIREBASE_SENDER_ID: ${{ vars.TASKPULSE_FIREBASE_SENDER_ID }}
+        run: |
+          umask 077
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = `${process.env.RUNNER_TEMP}/taskaty-dart-defines.json`;
+          const config = {
+            TASKPULSE_API_URL: process.env.TASKPULSE_API_URL || '',
+            FIREBASE_API_KEY: process.env.FIREBASE_API_KEY || '',
+            FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || '',
+            FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
+            FIREBASE_SENDER_ID: process.env.FIREBASE_SENDER_ID || '',
+          };
+          fs.writeFileSync(path, JSON.stringify(config), { mode: 0o600 });
+          NODE
+
+      - name: Build debug APK
+        working-directory: apps/android
+        run: flutter build apk --debug --dart-define-from-file="$RUNNER_TEMP/taskaty-dart-defines.json"
+
+      - name: Confirm APK exists
+        run: test -s apps/android/build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: taskaty-debug-apk-${{ github.run_number }}
+          path: apps/android/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3

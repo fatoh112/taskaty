@@ -2,6 +2,17 @@
 
 This repository is configured for permanent no-cost plans only. Do not attach Cloud Billing, enable Firebase Blaze, or upgrade Cloudflare Workers to Paid. If a quota or account policy blocks setup, leave that integration disabled and report the limit.
 
+## Public GitHub Actions Android build
+
+`.github/workflows/android-build.yml` runs on manual dispatch, relevant pushes, and pull requests to `main`. It uses the standard `ubuntu-24.04` hosted runner, Java 17, Android SDK API 36, and Flutter stable 3.47.0. GitHub documents standard hosted runners as free on public repositories; this workflow does not use larger runners or a paid build service. The debug APK artifact is retained for 3 days.
+
+The workflow always supports an unconfigured build. It skips Firebase initialization and shows the setup-required screen when configuration is absent. To create a configured test APK, add the following repository **Actions variables** (Settings → Secrets and variables → Actions → Variables):
+
+- `TASKPULSE_API_URL`: deployed HTTPS `workers.dev` API base URL.
+- `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, `TASKPULSE_FIREBASE_SENDER_ID`: public settings for the registered Android Firebase app with package `com.taskpulse.app`.
+
+These app settings are compiled into the APK by design. Do not add an FCM service-account JSON/private key, Cloudflare API token, or other server credential to Actions variables or the Android build. Those credentials belong only in Cloudflare Worker Secrets. If variables are unset, the APK is an unconfigured setup-required build and does not provide authentication or remote task storage. Download the APK from the `taskaty-debug-apk-*` artifact on a successful run. Artifact access follows GitHub sign-in and repository access rules.
+
 ## 1. Firebase Spark
 
 1. Create/select a Firebase project that remains on Spark, with no Cloud Billing account linked.
