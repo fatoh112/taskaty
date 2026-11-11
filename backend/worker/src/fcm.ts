@@ -22,9 +22,9 @@ interface ServiceAccount {
   private_key: string;
 }
 interface CachedAccessToken { projectId: string; value: string; expiresAt: number }
-interface OutboxRow { id: string; notification_id: string; recipient_user_id: string; task_id: string | null; attempts: number }
+export interface ClaimedOutboxRow { id: string; notification_id: string; recipient_user_id: string; task_id: string | null; attempts: number }
 interface DeviceRow { token_hash: string; token_ciphertext: string; token_iv: string }
-interface DeliveryQueryRow extends OutboxRow {
+interface DeliveryQueryRow extends ClaimedOutboxRow {
   title: string | null;
   body: string | null;
   type: string | null;
@@ -32,7 +32,7 @@ interface DeliveryQueryRow extends OutboxRow {
   token_ciphertext: string | null;
   token_iv: string | null;
 }
-interface Delivery { outbox: OutboxRow; title: string | null; body: string | null; type: string | null; devices: DeviceRow[] }
+interface Delivery { outbox: ClaimedOutboxRow; title: string | null; body: string | null; type: string | null; devices: DeviceRow[] }
 let accessTokenCache: CachedAccessToken | null = null;
 let accessTokenPromise: Promise<CachedAccessToken> | null = null;
 
@@ -143,42 +143,68 @@ async function sendOne(
   return { ok: false, retry: transient, code: `FCM_HTTP_${response.status}`, invalid, retryAfter: response.headers.get("retry-after") };
 }
 
-export async function dispatchOutbox(db: D1Database, env: Env, fetcher: typeof fetch = fetch, now = Date.now()) {
-  if (!env.FCM_TOKEN_ENCRYPTION_KEY || !env.FCM_SERVICE_ACCOUNT_JSON) return 0;
+export function claimOutboxStatement(db: D1Database, now = Date.now()): D1PreparedStatement {
   const timestamp = nowIso(now);
   const leaseUntil = nowIso(now + 2 * 60_000);
-  const claimed = await db.prepare(
+  return db.prepare(
     `UPDATE notification_outbox SET status = 'sending', attempts = attempts + 1, lease_until = ?
      WHERE id IN (
        SELECT id FROM notification_outbox
        WHERE (status = 'pending' AND available_at <= ?) OR (status = 'sending' AND lease_until <= ?)
        ORDER BY available_at, created_at LIMIT ${MAX_DELIVERY_RECIPIENTS}
      ) RETURNING id, notification_id, recipient_user_id, task_id, attempts`,
-  ).bind(leaseUntil, timestamp, timestamp).all<OutboxRow>();
-  const rows = claimed.results ?? [];
+  ).bind(leaseUntil, timestamp, timestamp);
+}
+
+export async function dispatchOutbox(
+  db: D1Database,
+  env: Env,
+  fetcher: typeof fetch = fetch,
+  now = Date.now(),
+  claimedRows?: ClaimedOutboxRow[],
+) {
+  if (!env.FCM_TOKEN_ENCRYPTION_KEY || !env.FCM_SERVICE_ACCOUNT_JSON) return 0;
+  const rows = claimedRows ?? ((await claimOutboxStatement(db, now).all<ClaimedOutboxRow>()).results ?? []);
   if (!rows.length) return 0;
+  const timestamp = nowIso(now);
 
   const ids = rows.map((row) => row.id);
   const placeholders = ids.map(() => "?").join(", ");
-  const deliveries = await db.prepare(
-    `WITH ranked_devices AS (
-       SELECT token_hash, user_id, token_ciphertext, token_iv,
-         ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY last_seen_at DESC, token_hash) AS device_rank
-       FROM device_tokens WHERE invalidated_at IS NULL AND user_id IN (
-         SELECT recipient_user_id FROM notification_outbox WHERE id IN (${placeholders})
+  const noDevice = db.prepare(`UPDATE notification_outbox SET status = 'no_device', lease_until = NULL
+    WHERE id IN (${placeholders}) AND status = 'sending'
+      AND EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_outbox.notification_id
+        AND n.user_id = notification_outbox.recipient_user_id)
+      AND NOT EXISTS (SELECT 1 FROM device_tokens d WHERE d.user_id = notification_outbox.recipient_user_id
+        AND d.invalidated_at IS NULL)`).bind(...ids);
+  const missingNotification = db.prepare(`UPDATE notification_outbox SET status = 'dead', lease_until = NULL,
+      last_error_code = 'NOTIFICATION_MISSING'
+    WHERE id IN (${placeholders}) AND status = 'sending'
+      AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_outbox.notification_id
+        AND n.user_id = notification_outbox.recipient_user_id)`).bind(...ids);
+  const deliveryBatch = await db.batch<DeliveryQueryRow>([
+    db.prepare(
+      `WITH ranked_devices AS (
+         SELECT token_hash, user_id, token_ciphertext, token_iv,
+           ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY last_seen_at DESC, token_hash) AS device_rank
+         FROM device_tokens WHERE invalidated_at IS NULL AND user_id IN (
+           SELECT recipient_user_id FROM notification_outbox WHERE id IN (${placeholders})
+         )
        )
-     )
-     SELECT o.id, o.notification_id, o.recipient_user_id, o.task_id, o.attempts,
-       n.title, n.body, n.type, d.token_hash, d.token_ciphertext, d.token_iv
-     FROM notification_outbox o
-     LEFT JOIN notifications n ON n.id = o.notification_id AND n.user_id = o.recipient_user_id
-     LEFT JOIN ranked_devices d ON d.user_id = o.recipient_user_id AND d.device_rank <= ${MAX_DEVICES_PER_RECIPIENT}
-     WHERE o.id IN (${placeholders})
-     ORDER BY o.available_at, o.created_at, o.id, d.device_rank`,
-  ).bind(...ids, ...ids).all<DeliveryQueryRow>();
+       SELECT o.id, o.notification_id, o.recipient_user_id, o.task_id, o.attempts,
+         n.title, n.body, n.type, d.token_hash, d.token_ciphertext, d.token_iv
+       FROM notification_outbox o
+       JOIN notifications n ON n.id = o.notification_id AND n.user_id = o.recipient_user_id
+       JOIN ranked_devices d ON d.user_id = o.recipient_user_id AND d.device_rank <= ${MAX_DEVICES_PER_RECIPIENT}
+       WHERE o.id IN (${placeholders})
+       ORDER BY o.available_at, o.created_at, o.id, d.device_rank`,
+    ).bind(...ids, ...ids),
+    noDevice,
+    missingNotification,
+  ]);
+  const deliveryRows = deliveryBatch[0]?.results ?? [];
 
   const grouped = new Map<string, Delivery>();
-  for (const item of deliveries.results ?? []) {
+  for (const item of deliveryRows) {
     let delivery = grouped.get(item.id);
     if (!delivery) {
       const { title, body, type, token_hash: _tokenHash, token_ciphertext: _tokenCiphertext, token_iv: _tokenIv, ...outbox } = item;
@@ -194,14 +220,8 @@ export async function dispatchOutbox(db: D1Database, env: Env, fetcher: typeof f
   const updates: D1PreparedStatement[] = [];
   for (const row of rows) {
     const delivery = grouped.get(row.id);
-    if (!delivery?.title || delivery.body === null || delivery.type === null) {
-      updates.push(db.prepare("UPDATE notification_outbox SET status = 'dead', lease_until = NULL, last_error_code = 'NOTIFICATION_MISSING' WHERE id = ? AND status = 'sending'").bind(row.id));
-      continue;
-    }
-    if (!delivery.devices.length) {
-      updates.push(db.prepare("UPDATE notification_outbox SET status = 'no_device', lease_until = NULL WHERE id = ? AND status = 'sending'").bind(row.id));
-      continue;
-    }
+    if (!delivery) continue; // Empty device lists and missing notifications were handled in the claim batch.
+    if (!delivery.title || delivery.body === null || delivery.type === null) continue;
 
     const deviceResults = await Promise.all(delivery.devices.map(async (device) => {
       try {

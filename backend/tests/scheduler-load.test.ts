@@ -141,6 +141,44 @@ beforeAll(async () => { serviceAccountJson = await serviceAccountFixture(); });
 afterEach(() => { resetFcmTokenCacheForTests(); resetDeviceEncryptionKeyForTests(); });
 
 describe("bounded scheduler load", () => {
+  it("keeps an idle Cron tick to three D1 round trips", async () => {
+    const baseTime = Math.floor(Date.now() / 60_000) * 60_000;
+    const fixture = await createFixture(0, 1, baseTime, baseTime + 60 * 60_000);
+
+    await runScheduledWork(fixture.db, fixture.env, { cron: "* * * * *", scheduledTime: baseTime }, async () => new Response("", { status: 503 }), baseTime);
+
+    const heartbeat = await fixture.rawDb.prepare("SELECT last_started_at, last_finished_at, last_error_code FROM worker_heartbeats WHERE name='taskpulse'")
+      .first<{ last_started_at: string; last_finished_at: string; last_error_code: string | null }>();
+    expect(fixture.db.requests).toBe(3);
+    expect(fixture.db.metrics.batchRequests).toBe(2);
+    expect(heartbeat?.last_started_at).toBe(nowIso(baseTime));
+    expect(heartbeat?.last_finished_at).not.toBeNull();
+    expect(heartbeat?.last_error_code).toBeNull();
+    fixture.rawDb.close();
+  });
+
+  it("batches overdue fanout and no-device outbox updates without duplicate rows", async () => {
+    const baseTime = Math.floor(Date.now() / 60_000) * 60_000;
+    const fixture = await createFixture(2, 2, baseTime, baseTime - 60_000);
+
+    const first = await runScheduledWork(fixture.db, fixture.env, { cron: "* * * * *", scheduledTime: baseTime }, async () => new Response("", { status: 503 }), baseTime);
+    expect(first).toMatchObject({ overdue: 2, fanoutRecipients: 4, outbox: 4 });
+    expect(fixture.db.requests).toBe(8);
+
+    const events = await fixture.rawDb.prepare("SELECT COUNT(*) AS count FROM deadline_events WHERE kind='overdue'").first<{ count: number }>();
+    const notifications = await fixture.rawDb.prepare("SELECT COUNT(*) AS count FROM notifications WHERE type='overdue'").first<{ count: number }>();
+    const noDeviceRows = await fixture.rawDb.prepare("SELECT COUNT(*) AS count FROM notification_outbox WHERE status='no_device'").first<{ count: number }>();
+    expect(events?.count).toBe(2);
+    expect(notifications?.count).toBe(4);
+    expect(noDeviceRows?.count).toBe(4);
+
+    await runScheduledWork(fixture.db, fixture.env, { cron: "* * * * *", scheduledTime: baseTime + 60_000 }, async () => new Response("", { status: 503 }), baseTime + 60_000);
+    const repeatedEvents = await fixture.rawDb.prepare("SELECT COUNT(*) AS count FROM deadline_events WHERE kind='overdue'").first<{ count: number }>();
+    const repeatedNotifications = await fixture.rawDb.prepare("SELECT COUNT(*) AS count FROM notifications WHERE type='overdue'").first<{ count: number }>();
+    expect({ events: repeatedEvents?.count, notifications: repeatedNotifications?.count }).toEqual({ events: 2, notifications: 4 });
+    fixture.rawDb.close();
+  });
+
   it("handles 10 simultaneous deadlines, 30 members, two devices, retry, and duplicate Cron calls", async () => {
     const baseTime = Math.floor(Date.now() / 60_000) * 60_000;
     const fixture = await createFixture(10, 30, baseTime, baseTime - 60_000);
