@@ -7,13 +7,13 @@
 | Check | Status | Evidence / limits |
 |---|---|---|
 | Worker TypeScript typecheck | PASS | `npm run typecheck:worker` completed with `tsc --noEmit`. |
-| Worker tests | PASS | `npm run test:worker`: 3 files, 12 tests passed. Uses a SQL.js-backed D1-shaped test adapter, generated test RSA keys/Firebase JWTs, and mocked FCM/network responses; it is not live FCM verification. |
+| Worker tests | PASS | `npm run test:worker`: 4 files, 15 tests passed locally. Uses a SQL.js-backed D1-shaped adapter, generated test RSA keys/Firebase JWTs, and mocked FCM/network responses; it is not live FCM verification. |
 | Dependency security audit | PASS | `npm audit`: zero known vulnerabilities in the installed npm dependency tree at audit time. Flutter/pub packages were not resolved or scanned locally. |
 | Cloudflare Worker build | PASS | `npm --workspace taskpulse-worker run build` completed via the official `cf build` and Cloudflare Vite plugin. A checksum-verified portable Node 24.22.2 was used because the system Node is 24.18. |
 | Cloudflare local D1 and Cron | PASS (local emulation) | `cf d1 migrations apply ... --local` applied `0001_initial.sql`; `cf dev` exposed the configured D1 binding and `* * * * *` trigger. Invoking the local scheduled handler returned `outcome: ok`; `/health` then showed a successful heartbeat. This used empty local D1 and no external push. |
 | Gradle Wrapper files | PASS | The Gradle 8.13 wrapper JAR SHA-256 matched Gradle's published checksum; scripts and distribution checksum are included. This is not an APK build. |
 | Git whitespace check | PASS | `git diff --cached --check` completed without errors on the complete staged patch. |
-| Flutter/Dart analyzer and tests | BLOCKED | Flutter/Dart SDK are absent. Flutter tests exist for parser, auth redirect, form validation, countdown and RTL, but they have not been run. |
+| Flutter/Dart analyzer and tests | FAIL (first CI attempt) | GitHub Actions installed Flutter 3.47.0 and found analyzer errors in the voice screen, parser and widget trees. Those issues have been patched; the updated branch still needs a green CI run. Flutter tests were skipped after analysis failed. |
 | Android debug APK | BLOCKED | Flutter and Android SDK/platform tools are absent; no APK artifact exists. Release signing is also not configured. |
 | Cloudflare Free account/deployment | BLOCKED | No Cloudflare account session or production D1 resource is configured. The local emulator is not a deployed account and does not measure the account's Free CPU/quota behavior. |
 | Firebase/FCM live configuration | BLOCKED | No Firebase project/app configuration, service-account secret or device registration is available in this checkout. |
@@ -38,6 +38,18 @@
 | L. Spark and Workers Free only | PASS (architecture/audit) | Source uses Firebase Auth/FCM and Workers/D1/Cron free-plan features only. No paid resources or billing changes were made. Production account plan is unverified. |
 | M. No service requires enabling billing | PASS (design audit), account UNVERIFIED | No planned integration requires a paid plan. The account owner must preserve Spark/Workers Free; no account configuration was available to inspect. |
 | N. Installable APK builds | BLOCKED | Flutter/Dart and Android SDK are absent, so no APK was built. |
+
+## Scheduler load measurements
+
+These are repeatable local Node/SQL.js harness results. The test injects mocked FCM responses and measures local Node CPU, elapsed time, SQL calls/statements and row counts. SQL.js does not report Cloudflare Worker CPU, and the test does not measure live D1, Cron scheduling or external FCM delivery.
+
+| Scenario | Observed result |
+|---|---|
+| 10 overdue tasks, 30 team members, 2 devices/member, one transient FCM 503, repeated Cron | 10 logical events; 300 persistent notifications; 300 mocked recipient deliveries drained in 21 simulated ticks. Deadline detection p50 1 min, p95 2 min, max 2 min. The transient device was retried once. Peak combined D1/Google/FCM subrequests: 46. |
+| 100 overdue tasks after a 10-minute scheduler outage, 30 members, 2 devices/member, one transient FCM 503 | 100 logical events; 3,000 persistent notifications and 3,000 mocked recipient records sent in 201 simulated ticks. Maximum due-to-detection delay 29 min; persistent fan-out occurred in the same tick as each event. One device retried once. Peak combined subrequests: 46. |
+| Concurrent task completion at exactly the due time and Cron detection | Completion is on time; no overdue event is generated. |
+
+The 10-task run used 196 D1 calls and 554 SQL statements across 21 ticks, returning 1,233 rows and changing 1,687. Its local adapter SQL wall time was 278.67 ms total; per-tick Node CPU p50/p95/max was 31/187/203 ms. The 100-task run used 1,828 D1 calls and 5,408 statements across 201 ticks, returning 12,303 rows and changing 16,773; adapter SQL wall time was 1,640.80 ms total. Per-tick Node CPU p50/p95/max was 16/62/94 ms. These Node numbers must not be compared to Cloudflare's 10 ms CPU allowance; Worker CPU remains unmeasured and deployment is not production-verified.
 
 ## Known verification limits
 

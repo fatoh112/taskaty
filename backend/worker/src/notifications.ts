@@ -2,6 +2,8 @@ import { ApiError, decodeBase64, encodeBase64, nowIso, requireString, sha256Hex 
 import { decodeCursor, encodeCursor } from "./data.ts";
 import type { D1Database } from "./types.ts";
 
+let encryptionKeyCache: { secret: string; key: Promise<CryptoKey> } | null = null;
+
 function toBufferSource(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -10,11 +12,17 @@ function toBufferSource(bytes: Uint8Array): ArrayBuffer {
 
 function encryptionKey(secret?: string): Promise<CryptoKey> {
   if (!secret) throw new ApiError("PUSH_NOT_CONFIGURED", 503, "Push notification setup is incomplete.");
+  if (encryptionKeyCache?.secret === secret) return encryptionKeyCache.key;
   let raw: Uint8Array;
   try { raw = decodeBase64(secret); } catch { throw new ApiError("PUSH_NOT_CONFIGURED", 503, "Push notification setup is incomplete."); }
   if (raw.byteLength !== 32) throw new ApiError("PUSH_NOT_CONFIGURED", 503, "Push notification key must be 32 bytes.");
-  return crypto.subtle.importKey("raw", toBufferSource(raw), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  const key = crypto.subtle.importKey("raw", toBufferSource(raw), { name: "AES-GCM" }, false, ["encrypt", "decrypt"])
+    .catch((error) => { if (encryptionKeyCache?.key === key) encryptionKeyCache = null; throw error; });
+  encryptionKeyCache = { secret, key };
+  return key;
 }
+
+export function resetDeviceEncryptionKeyForTests(): void { encryptionKeyCache = null; }
 
 export async function encryptDeviceToken(token: string, secret?: string) {
   const iv = crypto.getRandomValues(new Uint8Array(12));

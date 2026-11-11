@@ -159,7 +159,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
   int get _selectedIndex => widget.location.startsWith('/tasks') ? 1 : widget.location.startsWith('/team') ? 2 : widget.location.startsWith('/notifications') ? 3 : 0;
   @override Widget build(BuildContext context) {
-    final rtl = Directionality.of(context) == TextDirection.rtl;
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [const Icon(Icons.bolt, color: TaskatyColors.cyan), const SizedBox(width: 8), Text('Taskaty', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800))]),

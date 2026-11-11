@@ -1,10 +1,12 @@
 import { ApiError, base64Url, decodeBase64, nowIso } from "./http.ts";
 import { decryptDeviceToken } from "./notifications.ts";
-import type { D1Database, Env } from "./types.ts";
+import type { D1Database, D1PreparedStatement, Env } from "./types.ts";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
-const MAX_DELIVERY_RECIPIENTS = 3;
+// A full tick uses at most 16 D1 calls and 31 FCM/OAuth fetches (2 devices × 15 users + token grant).
+// This leaves headroom below the Workers Free 50-subrequest limit for runtime changes.
+const MAX_DELIVERY_RECIPIENTS = 15;
 const MAX_DEVICES_PER_RECIPIENT = 2;
 const MAX_ATTEMPTS = 8;
 
@@ -22,6 +24,15 @@ interface ServiceAccount {
 interface CachedAccessToken { projectId: string; value: string; expiresAt: number }
 interface OutboxRow { id: string; notification_id: string; recipient_user_id: string; task_id: string | null; attempts: number }
 interface DeviceRow { token_hash: string; token_ciphertext: string; token_iv: string }
+interface DeliveryQueryRow extends OutboxRow {
+  title: string | null;
+  body: string | null;
+  type: string | null;
+  token_hash: string | null;
+  token_ciphertext: string | null;
+  token_iv: string | null;
+}
+interface Delivery { outbox: OutboxRow; title: string | null; body: string | null; type: string | null; devices: DeviceRow[] }
 let accessTokenCache: CachedAccessToken | null = null;
 let accessTokenPromise: Promise<CachedAccessToken> | null = null;
 
@@ -133,6 +144,7 @@ async function sendOne(
 }
 
 export async function dispatchOutbox(db: D1Database, env: Env, fetcher: typeof fetch = fetch, now = Date.now()) {
+  if (!env.FCM_TOKEN_ENCRYPTION_KEY || !env.FCM_SERVICE_ACCOUNT_JSON) return 0;
   const timestamp = nowIso(now);
   const leaseUntil = nowIso(now + 2 * 60_000);
   const claimed = await db.prepare(
@@ -144,73 +156,86 @@ export async function dispatchOutbox(db: D1Database, env: Env, fetcher: typeof f
      ) RETURNING id, notification_id, recipient_user_id, task_id, attempts`,
   ).bind(leaseUntil, timestamp, timestamp).all<OutboxRow>();
   const rows = claimed.results ?? [];
-  let processed = 0;
+  if (!rows.length) return 0;
+
+  const ids = rows.map((row) => row.id);
+  const placeholders = ids.map(() => "?").join(", ");
+  const deliveries = await db.prepare(
+    `WITH ranked_devices AS (
+       SELECT token_hash, user_id, token_ciphertext, token_iv,
+         ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY last_seen_at DESC, token_hash) AS device_rank
+       FROM device_tokens WHERE invalidated_at IS NULL AND user_id IN (
+         SELECT recipient_user_id FROM notification_outbox WHERE id IN (${placeholders})
+       )
+     )
+     SELECT o.id, o.notification_id, o.recipient_user_id, o.task_id, o.attempts,
+       n.title, n.body, n.type, d.token_hash, d.token_ciphertext, d.token_iv
+     FROM notification_outbox o
+     LEFT JOIN notifications n ON n.id = o.notification_id AND n.user_id = o.recipient_user_id
+     LEFT JOIN ranked_devices d ON d.user_id = o.recipient_user_id AND d.device_rank <= ${MAX_DEVICES_PER_RECIPIENT}
+     WHERE o.id IN (${placeholders})
+     ORDER BY o.available_at, o.created_at, o.id, d.device_rank`,
+  ).bind(...ids, ...ids).all<DeliveryQueryRow>();
+
+  const grouped = new Map<string, Delivery>();
+  for (const item of deliveries.results ?? []) {
+    let delivery = grouped.get(item.id);
+    if (!delivery) {
+      const { title, body, type, token_hash: _tokenHash, token_ciphertext: _tokenCiphertext, token_iv: _tokenIv, ...outbox } = item;
+      delivery = { outbox, title, body, type, devices: [] };
+      grouped.set(item.id, delivery);
+    }
+    if (item.token_hash && item.token_ciphertext && item.token_iv) {
+      delivery.devices.push({ token_hash: item.token_hash, token_ciphertext: item.token_ciphertext, token_iv: item.token_iv });
+    }
+  }
+
+  const deletes: D1PreparedStatement[] = [];
+  const updates: D1PreparedStatement[] = [];
   for (const row of rows) {
-    const notification = await db.prepare("SELECT title, body, type FROM notifications WHERE id = ? AND user_id = ?")
-      .bind(row.notification_id, row.recipient_user_id).first<{ title: string; body: string; type: string }>();
-    if (!notification) {
-      await db.prepare("UPDATE notification_outbox SET status = 'dead', lease_until = NULL, last_error_code = 'NOTIFICATION_MISSING' WHERE id = ?")
-        .bind(row.id).run();
-      processed++;
+    const delivery = grouped.get(row.id);
+    if (!delivery?.title || delivery.body === null || delivery.type === null) {
+      updates.push(db.prepare("UPDATE notification_outbox SET status = 'dead', lease_until = NULL, last_error_code = 'NOTIFICATION_MISSING' WHERE id = ? AND status = 'sending'").bind(row.id));
       continue;
     }
-    const devices = await db.prepare(
-      `SELECT token_hash, token_ciphertext, token_iv FROM device_tokens
-       WHERE user_id = ? AND invalidated_at IS NULL ORDER BY last_seen_at DESC LIMIT ${MAX_DEVICES_PER_RECIPIENT}`,
-    ).bind(row.recipient_user_id).all<DeviceRow>();
-    const deviceRows = devices.results ?? [];
-    if (!deviceRows.length) {
-      await db.prepare("UPDATE notification_outbox SET status = 'no_device', lease_until = NULL WHERE id = ? AND status = 'sending'").bind(row.id).run();
-      processed++;
+    if (!delivery.devices.length) {
+      updates.push(db.prepare("UPDATE notification_outbox SET status = 'no_device', lease_until = NULL WHERE id = ? AND status = 'sending'").bind(row.id));
       continue;
     }
-    if (!env.FCM_TOKEN_ENCRYPTION_KEY || !env.FCM_SERVICE_ACCOUNT_JSON) {
-      const retryAt = nowIso(now + retryDelay(row.attempts, null, now));
-      await db.prepare("UPDATE notification_outbox SET status = 'pending', available_at = ?, lease_until = NULL, last_error_code = 'FCM_NOT_CONFIGURED' WHERE id = ? AND status = 'sending'")
-        .bind(retryAt, row.id).run();
-      processed++;
-      continue;
-    }
-    let failure: { retry: boolean; code: string | null; retryAfter: string | null } | null = null;
-    for (const device of deviceRows) {
-      let token: string;
+
+    const deviceResults = await Promise.all(delivery.devices.map(async (device) => {
       try {
-        token = await decryptDeviceToken(device.token_ciphertext, device.token_iv, env.FCM_TOKEN_ENCRYPTION_KEY);
-      } catch {
-        failure = { retry: true, code: "FCM_TOKEN_DECRYPT_FAILED", retryAfter: null };
-        continue;
-      }
-      try {
+        const token = await decryptDeviceToken(device.token_ciphertext, device.token_iv, env.FCM_TOKEN_ENCRYPTION_KEY);
         const result = await sendOne(token, {
-          title: notification.title,
-          body: notification.body,
+          title: delivery.title!,
+          body: delivery.body!,
           notificationId: row.notification_id,
           taskId: row.task_id,
-          eventType: notification.type,
+          eventType: delivery.type!,
         }, env, fetcher, now);
-        if (result.invalid) {
-          await db.prepare("DELETE FROM device_tokens WHERE token_hash = ?").bind(device.token_hash).run();
-        } else if (!result.ok) {
-          failure = { retry: result.retry, code: result.code, retryAfter: result.retryAfter };
-        }
+        return { device, result };
       } catch (error) {
-        failure = { retry: true, code: error instanceof ApiError ? error.code : "FCM_SEND_FAILED", retryAfter: null };
+        return { device, result: { ok: false, retry: true, code: error instanceof ApiError ? error.code : "FCM_SEND_FAILED", invalid: false, retryAfter: null } };
       }
-    }
+    }));
+
+    for (const { device, result } of deviceResults) if (result.invalid) deletes.push(db.prepare("DELETE FROM device_tokens WHERE token_hash = ?").bind(device.token_hash));
+    const failures = deviceResults.map(({ result }) => result).filter((result) => !result.ok && !result.invalid);
+    const failure = failures.find((result) => result.retry) ?? failures[0] ?? null;
     if (!failure) {
-      await db.prepare("UPDATE notification_outbox SET status = 'sent', lease_until = NULL, delivered_at = ?, last_error_code = NULL WHERE id = ? AND status = 'sending'")
-        .bind(timestamp, row.id).run();
+      updates.push(db.prepare("UPDATE notification_outbox SET status = 'sent', lease_until = NULL, delivered_at = ?, last_error_code = NULL WHERE id = ? AND status = 'sending'")
+        .bind(timestamp, row.id));
     } else if (!failure.retry || row.attempts >= MAX_ATTEMPTS) {
-      await db.prepare("UPDATE notification_outbox SET status = 'dead', lease_until = NULL, last_error_code = ? WHERE id = ? AND status = 'sending'")
-        .bind(failure.code, row.id).run();
+      updates.push(db.prepare("UPDATE notification_outbox SET status = 'dead', lease_until = NULL, last_error_code = ? WHERE id = ? AND status = 'sending'")
+        .bind(failure.code, row.id));
     } else {
-      const retryAt = nowIso(now + retryDelay(row.attempts, failure.retryAfter, now));
-      await db.prepare("UPDATE notification_outbox SET status = 'pending', available_at = ?, lease_until = NULL, last_error_code = ? WHERE id = ? AND status = 'sending'")
-        .bind(retryAt, failure.code, row.id).run();
+      updates.push(db.prepare("UPDATE notification_outbox SET status = 'pending', available_at = ?, lease_until = NULL, last_error_code = ? WHERE id = ? AND status = 'sending'")
+        .bind(nowIso(now + retryDelay(row.attempts, failure.retryAfter, now)), failure.code, row.id));
     }
-    processed++;
   }
-  return processed;
+  const statements = [...deletes, ...updates];
+  if (statements.length) await db.batch(statements);
+  return rows.length;
 }
 
 export function resetFcmTokenCacheForTests(): void {

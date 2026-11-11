@@ -73,7 +73,6 @@ class DashboardScreen extends ConsumerWidget {
               if (d['_notModified'] == true) return const SizedBox.shrink();
               final summary = d['summary'] as Map<String, dynamic>? ?? {};
               final memberStats = (d['members'] as List? ?? const []).cast<Map<String, dynamic>>();
-              final approaching = (d['approaching'] as List? ?? const []).cast<Map<String, dynamic>>().map(TaskItem.fromJson).toList();
               final averageSeconds = (summary['averageCompletionSeconds'] as num?)?.toInt();
               final averageLabel = averageSeconds == null ? '—' : averageSeconds >= 3600
                   ? '${(averageSeconds / 3600).toStringAsFixed(1)} ${tr(context, 'س', 'h')}'
@@ -93,7 +92,7 @@ class DashboardScreen extends ConsumerWidget {
                 ])),
                 if (memberStats.isNotEmpty) ...[
                   Padding(padding: const EdgeInsets.fromLTRB(20, 22, 20, 8), child: Text(tr(context, 'أداء الفريق', 'Team performance'), style: Theme.of(context).textTheme.titleLarge)),
-                  ...memberStats.take(5).map((m) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: Card(child: ListTile(leading: CircleAvatar(backgroundColor: TaskatyColors.cyan.withValues(alpha: .12), child: Text(((m['displayName'] as String?) ?? '?').characters.first.toUpperCase(), style: const TextStyle(color: TaskatyColors.cyan))), title: Text((m['displayName'] as String?)?.isNotEmpty == true ? m['displayName'] as String : tr(context, 'عضو الفريق', 'Team member')), subtitle: Text('${m['completedCount'] ?? 0} ${tr(context, 'مكتملة', 'completed')} · ${m['overdueCount'] ?? 0} ${tr(context, 'متأخرة', 'overdue')}'), trailing: Text(m['onTimeCompletionPercent'] == null ? '—' : '${m['onTimeCompletionPercent']}%', style: const TextStyle(color: TaskatyColors.green, fontWeight: FontWeight.w700))))),
+                  ...memberStats.take(5).map((m) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: Card(child: ListTile(leading: CircleAvatar(backgroundColor: TaskatyColors.cyan.withValues(alpha: .12), child: Text(((m['displayName'] as String?) ?? '?').characters.first.toUpperCase(), style: const TextStyle(color: TaskatyColors.cyan))), title: Text((m['displayName'] as String?)?.isNotEmpty == true ? m['displayName'] as String : tr(context, 'عضو الفريق', 'Team member')), subtitle: Text('${m['completedCount'] ?? 0} ${tr(context, 'مكتملة', 'completed')} · ${m['overdueCount'] ?? 0} ${tr(context, 'متأخرة', 'overdue')}'), trailing: Text(m['onTimeCompletionPercent'] == null ? '—' : '${m['onTimeCompletionPercent']}%', style: const TextStyle(color: TaskatyColors.green, fontWeight: FontWeight.w700)))))),
                 ],
               ]);
             },
@@ -105,7 +104,7 @@ class DashboardScreen extends ConsumerWidget {
             data: (d) {
               final upcoming = (d['approaching'] as List? ?? const []).cast<Map<String, dynamic>>().map(TaskItem.fromJson).toList();
               if (upcoming.isEmpty) return Padding(padding: const EdgeInsets.all(20), child: EmptyPanel(icon: Icons.check_circle_outline, title: tr(context, 'مفيش مواعيد قريبة', 'No approaching deadlines'), body: tr(context, 'مفيش مهام مستحقة خلال الساعتين الجايين.', 'Nothing is due in the next two hours.')));
-              return Column(children: upcoming.take(3).map((t) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: TaskCard(task: t, onTap: () => context.push('/task/${t.id}'))).toList());
+              return Column(children: upcoming.take(3).map((t) => Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: TaskCard(task: t, onTap: () => context.push('/task/${t.id}'))))).toList());
             },
           ),
         ])));

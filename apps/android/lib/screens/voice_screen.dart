@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -72,10 +73,18 @@ class VoiceCommandReviewScreen extends ConsumerStatefulWidget {
 }
 
 class _VoiceCommandReviewScreenState extends ConsumerState<VoiceCommandReviewScreen> {
-  String? _selectedTaskId; bool _busy = false;
+  String? _selectedTaskId; bool _busy = false, _redirectingToCreate = false;
   @override Widget build(BuildContext context) {
     final parsed = TaskParser.parse(widget.transcript, const []);
-    if (parsed.intent == 'create') return TaskCreateScreen(transcript: widget.transcript);
+    if (parsed.intent == 'create') {
+      if (!_redirectingToCreate) {
+        _redirectingToCreate = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go('/create', extra: widget.transcript);
+        });
+      }
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final teams = ref.watch(teamsProvider);
     final verb = switch (parsed.intent) {'completed' => tr(context, 'إكمال', 'Complete'), 'in_progress' => tr(context, 'بدء', 'Start'), _ => tr(context, 'إلغاء', 'Cancel')};
     return Scaffold(appBar: AppBar(title: Text(tr(context, 'مراجعة تحديث صوتي', 'Review voice update'))), body: teams.when(
@@ -101,7 +110,7 @@ class _VoiceCommandReviewScreenState extends ConsumerState<VoiceCommandReviewScr
             if (candidates.isEmpty) Padding(padding: const EdgeInsets.only(top: 20), child: EmptyPanel(icon: Icons.task_alt, title: tr(context, 'مفيش مهام نشطة', 'No active tasks'), body: tr(context, 'مفيش مهمة قابلة للتحديث في الفريق.', 'There are no open team tasks to update.'))),
             ...candidates.map((task) => Card(child: RadioListTile<String>(value: task.id, groupValue: _selectedTaskId, onChanged: (id) => setState(() => _selectedTaskId = id), title: Text(task.title), subtitle: Text('${task.status} · ${MaterialLocalizations.of(context).formatMediumDate(task.dueAt)}')))),
             const SizedBox(height: 12),
-            FilledButton.icon(onPressed: _busy || _selectedTaskId == null ? null : () => _apply(parsed.intent, taskList), icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check_circle_outline), label: Text(tr(context, 'تأكيد $verb المهمة', 'Confirm $verb task'))),
+            FilledButton.icon(onPressed: _busy || _selectedTaskId == null ? null : () => _apply(parsed.intent, tasks), icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check_circle_outline), label: Text(tr(context, 'تأكيد $verb المهمة', 'Confirm $verb task'))),
           ]);
         });
       },

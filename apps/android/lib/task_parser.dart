@@ -139,14 +139,14 @@ class TaskParser {
     if (amount.isEmpty) return 1;
     final numeric = double.tryParse(amount);
     if (numeric != null) return numeric;
-    return _words[amount];
+    return _words[amount]?.toDouble();
   }
   static bool _containsName(String text, String name) {
     final normalized = _normalize(text).toLowerCase();
     final candidate = _normalize(name).toLowerCase().trim();
-    return candidate.isNotEmpty && RegExp('(^|[\\s،,])(?:ل|على)?${RegExp.escape(candidate)}(?=$|[\\s،,])').hasMatch(normalized);
+    return candidate.isNotEmpty && RegExp(r'(^|[\\s،,])(?:ل|على)?' + RegExp.escape(candidate) + r'(?=$|[\\s،,])').hasMatch(normalized);
   }
-  static String _replaceName(String text, String name) => text.replaceAll(RegExp('(?:^|[\\s،,])(?:ل|على)?${RegExp.escape(_normalize(name))}(?=$|[\\s،,])', caseSensitive: false), ' ');
+  static String _replaceName(String text, String name) => text.replaceAll(RegExp(r'(?:^|[\s،,])(?:ل|على)?' + RegExp.escape(_normalize(name)) + r'(?=$|[\s،,])', caseSensitive: false), ' ');
   static int _to24Hour(int hour, String text) {
     final afternoon = RegExp(r'(مساء|بالليل|مسا)').hasMatch(text);
     if (afternoon && hour < 12) return hour + 12;

@@ -2,9 +2,9 @@ import { nowIso, randomId } from "./http.ts";
 import { dispatchOutbox } from "./fcm.ts";
 import type { D1Database, Env, ScheduledController } from "./types.ts";
 
-const MAX_DEADLINES_PER_KIND = 1;
-const MAX_FANOUT_JOBS = 1;
-const MAX_FANOUT_RECIPIENTS = 10;
+const MAX_DEADLINES_PER_KIND = 5;
+const MAX_FANOUT_JOBS = 3;
+const MAX_FANOUT_RECIPIENTS = 30;
 
 interface DeadlineCandidate {
   id: string;
@@ -29,13 +29,13 @@ interface FanoutJob {
   lease_until: string | null;
 }
 
-async function processDeadline(db: D1Database, candidate: DeadlineCandidate, kind: "reminder" | "overdue", now: number): Promise<boolean> {
+function deadlineStatements(candidate: DeadlineCandidate, kind: "reminder" | "overdue", now: number, db: D1Database) {
   const timestamp = nowIso(now);
   const eventKey = `${kind}:${candidate.id}`;
   const isOverdue = kind === "overdue";
   const taskUpdate = isOverdue
     ? db.prepare(`UPDATE tasks SET is_overdue = 1, overdue_alert_at = ?, updated_at = ?, version = version + 1
-        WHERE id = ? AND is_overdue = 0 AND status IN ('pending', 'in_progress') AND due_at <= ? RETURNING id`)
+        WHERE id = ? AND is_overdue = 0 AND status IN ('pending', 'in_progress') AND due_at < ? RETURNING id`)
       .bind(timestamp, timestamp, candidate.id, timestamp)
     : db.prepare(`UPDATE tasks SET reminder_sent_at = ?, updated_at = ?, version = version + 1
         WHERE id = ? AND reminder_sent_at IS NULL AND status IN ('pending', 'in_progress') AND due_at > ? AND reminder_at <= ? RETURNING id`)
@@ -88,8 +88,14 @@ async function processDeadline(db: D1Database, candidate: DeadlineCandidate, kin
       ON CONFLICT(task_id, event_key) WHERE event_key IS NOT NULL DO NOTHING`)
     .bind(randomId(), isOverdue ? "overdue" : "reminded", eventKey, timestamp, kind, candidate.id, timestamp));
 
-  const results = await db.batch(statements);
-  return (results[0]?.results?.length ?? 0) > 0;
+  return statements;
+}
+
+async function processDeadlines(db: D1Database, candidates: DeadlineCandidate[], kind: "reminder" | "overdue", now: number): Promise<number> {
+  if (candidates.length === 0) return 0;
+  const groups = candidates.map((candidate) => deadlineStatements(candidate, kind, now, db));
+  const results = await db.batch(groups.flat());
+  return groups.reduce((processed, group, index) => processed + ((results[index * group.length]?.results?.length ?? 0) > 0 ? 1 : 0), 0);
 }
 
 async function detectReminders(db: D1Database, now: number): Promise<number> {
@@ -99,21 +105,17 @@ async function detectReminders(db: D1Database, now: number): Promise<number> {
     FROM tasks WHERE reminder_sent_at IS NULL AND reminder_at IS NOT NULL AND reminder_at <= ?
       AND due_at > ? AND status IN ('pending', 'in_progress') ORDER BY reminder_at, id LIMIT ${MAX_DEADLINES_PER_KIND}`)
     .bind(timestamp, timestamp).all<DeadlineCandidate>();
-  let processed = 0;
-  for (const row of candidates.results ?? []) if (await processDeadline(db, row, "reminder", now)) processed++;
-  return processed;
+  return processDeadlines(db, candidates.results ?? [], "reminder", now);
 }
 
 async function detectOverdue(db: D1Database, now: number): Promise<number> {
   const timestamp = nowIso(now);
   const candidates = await db.prepare(`SELECT id, team_id, title, created_by, assigned_to,
       (SELECT display_name FROM users WHERE uid = tasks.assigned_to) AS assigned_name, due_at, reminder_at
-    FROM tasks WHERE is_overdue = 0 AND due_at <= ? AND status IN ('pending', 'in_progress')
+    FROM tasks WHERE is_overdue = 0 AND due_at < ? AND status IN ('pending', 'in_progress')
     ORDER BY due_at, id LIMIT ${MAX_DEADLINES_PER_KIND}`)
     .bind(timestamp).all<DeadlineCandidate>();
-  let processed = 0;
-  for (const row of candidates.results ?? []) if (await processDeadline(db, row, "overdue", now)) processed++;
-  return processed;
+  return processDeadlines(db, candidates.results ?? [], "overdue", now);
 }
 
 async function processFanout(db: D1Database, now: number): Promise<number> {
@@ -127,9 +129,10 @@ async function processFanout(db: D1Database, now: number): Promise<number> {
   let processed = 0;
   for (const job of claimed.results ?? []) {
     const members = await db.prepare(`SELECT user_id FROM team_members WHERE team_id = ? AND user_id > ? AND left_at IS NULL
-        ORDER BY user_id LIMIT ${MAX_FANOUT_RECIPIENTS}`)
+        ORDER BY user_id LIMIT ${MAX_FANOUT_RECIPIENTS + 1}`)
       .bind(job.team_id, job.cursor_user_id).all<{ user_id: string }>();
-    const ids = (members.results ?? []).map((row) => row.user_id);
+    const page = (members.results ?? []).slice(0, MAX_FANOUT_RECIPIENTS);
+    const ids = page.map((row) => row.user_id);
     const lastUserId = ids[ids.length - 1];
     if (!lastUserId) {
       await db.prepare("UPDATE notification_fanout SET completed_at = ?, lease_until = NULL WHERE id = ? AND lease_until = ?")
@@ -147,7 +150,7 @@ async function processFanout(db: D1Database, now: number): Promise<number> {
         WHERE n.team_id = ? AND n.event_key = ? AND n.created_at = ? AND n.user_id > ? AND n.user_id <= ?
         ON CONFLICT(notification_id, recipient_user_id) DO NOTHING`)
       .bind(timestamp, timestamp, job.team_id, job.event_key, job.created_at, job.cursor_user_id, lastUserId);
-    const complete = ids.length < MAX_FANOUT_RECIPIENTS;
+    const complete = (members.results?.length ?? 0) <= MAX_FANOUT_RECIPIENTS;
     const updateCursor = db.prepare(`UPDATE notification_fanout SET cursor_user_id = ?, lease_until = ?,
         completed_at = CASE WHEN ? = 1 THEN ? ELSE NULL END
       WHERE id = ? AND lease_until = ? AND completed_at IS NULL`)

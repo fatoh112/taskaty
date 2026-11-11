@@ -28,7 +28,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       final selected = ref.watch(activeTeamProvider); final team = items.where((t) => t.id == selected?.id).firstOrNull ?? items.first;
       final query = TaskQuery(team.id, status: _status, search: _searchText, onlyMine: _mine);
       final tasks = ref.watch(taskListProvider(query));
-      final members = ref.watch(membersProvider(team.id)).valueOrNull ?? const <Member>[];
+      final members = ref.watch(membersProvider(team.id)).whenOrNull(data: (value) => value) ?? const <Member>[];
       return PollingRefresh(refresh: _refresh, child: Column(children: [
         ScreenTitle(tr(context, 'المهام', 'Tasks'), subtitle: tr(context, 'تابع شغل الفريق ومواعيده.', 'Track work and deadlines.'), trailing: IconButton(onPressed: () => context.push('/create'), icon: const Icon(Icons.add, color: TaskatyColors.cyan))),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: SelectTeamCard(teams: items)),
@@ -41,7 +41,51 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           _FilterChip(label: tr(context, 'ملغية', 'Cancelled'), selected: _status == 'cancelled', onTap: () => setState(() => _status = 'cancelled')),
         ])),
         SwitchListTile(value: _mine, onChanged: (v) => setState(() => _mine = v), title: Text(tr(context, 'مهامي فقط', 'Assigned to me')), dense: true, secondary: const Icon(Icons.person_outline)),
-        Expanded(child: RefreshIndicator(onRefresh: _refresh, child: tasks.when(loading: () => const Center(child: CircularProgressIndicator()), error: (e, _) => ErrorPanel(message: e.toString(), onRetry: () => ref.invalidate(taskListProvider(query))), data: (list) => list.isEmpty ? ListView(children: [SizedBox(height: 220, child: EmptyPanel(icon: Icons.checklist_outlined, title: tr(context, 'مفيش مهام هنا', 'No tasks here'), body: tr(context, 'غيّر الفلتر أو اعمل مهمة جديدة.', 'Change the filter or create a task.'), action: FilledButton(onPressed: () => context.push('/create'), child: Text(tr(context, 'إنشاء مهمة', 'Create task'))))]) : ListView.builder(padding: const EdgeInsets.fromLTRB(16, 4, 16, 96), itemCount: list.length, itemBuilder: (_, i) { final owner = members.where((m) => m.id == list[i].assignedTo).firstOrNull; return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: TaskCard(task: list[i], assignee: owner?.name.isNotEmpty == true ? owner!.name : owner?.email, onTap: () => context.push('/task/${list[i].id}'))); }))))),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: tasks.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => ErrorPanel(message: e.toString(), onRetry: () => ref.invalidate(taskListProvider(query))),
+              data: (list) {
+                if (list.isEmpty) {
+                  return ListView(
+                    children: [
+                      SizedBox(
+                        height: 220,
+                        child: EmptyPanel(
+                          icon: Icons.checklist_outlined,
+                          title: tr(context, 'مفيش مهام هنا', 'No tasks here'),
+                          body: tr(context, 'غيّر الفلتر أو اعمل مهمة جديدة.', 'Change the filter or create a task.'),
+                          action: FilledButton(
+                            onPressed: () => context.push('/create'),
+                            child: Text(tr(context, 'إنشاء مهمة', 'Create task')),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                  itemCount: list.length,
+                  itemBuilder: (context, index) {
+                    final task = list[index];
+                    final owner = members.where((member) => member.id == task.assignedTo).firstOrNull;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: TaskCard(
+                        task: task,
+                        assignee: owner?.name.isNotEmpty == true ? owner!.name : owner?.email,
+                        onTap: () => context.push('/task/' + task.id),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ),
       ]));
     });
   }
@@ -125,11 +169,11 @@ class TaskDetailsScreen extends ConsumerWidget {
   @override Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(taskProvider(taskId));
     return async.when(loading: () => const Center(child: CircularProgressIndicator()), error: (e, _) => ErrorPanel(message: e.toString(), onRetry: () => ref.invalidate(taskProvider(taskId))), data: (task) {
-      final teams = ref.watch(teamsProvider).valueOrNull ?? const <Team>[];
+      final teams = ref.watch(teamsProvider).whenOrNull(data: (value) => value) ?? const <Team>[];
       final team = teams.where((t) => t.id == task.teamId).firstOrNull;
       final userId = FirebaseAuth.instance.currentUser?.uid;
       final canEditContent = team != null && (team.role != 'member' || task.createdBy == userId);
-      final members = ref.watch(membersProvider(task.teamId)).valueOrNull ?? const <Member>[];
+      final members = ref.watch(membersProvider(task.teamId)).whenOrNull(data: (value) => value) ?? const <Member>[];
       final assigneeName = members.where((m) => m.id == task.assignedTo).firstOrNull?.name;
       return ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
       ScreenTitle(tr(context, 'تفاصيل المهمة', 'Task details'), subtitle: tr(context, 'الحالة والتاريخ وسجل النشاط.', 'Status, deadline, and activity.')),

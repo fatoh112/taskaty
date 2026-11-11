@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../app.dart';
 import '../models.dart';
@@ -32,7 +29,7 @@ class TaskCard extends ConsumerWidget {
   const TaskCard({super.key, required this.task, this.assignee, this.onTap});
   final TaskItem task; final String? assignee; final VoidCallback? onTap;
   @override Widget build(BuildContext context, WidgetRef ref) {
-    final now = ref.watch(countdownNowProvider).valueOrNull ?? DateTime.now();
+    final now = ref.watch(countdownNowProvider).whenOrNull(data: (value) => value) ?? DateTime.now();
     final overdue = task.isOverdue && task.active;
     final remaining = task.dueAt.difference(now);
     final status = switch (task.status) {'completed' => tr(context, 'مكتملة', 'Completed'), 'cancelled' => tr(context, 'ملغية', 'Cancelled'), 'in_progress' => tr(context, 'جاري التنفيذ', 'In progress'), _ => tr(context, 'قيد الانتظار', 'Pending')};
