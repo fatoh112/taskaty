@@ -6,13 +6,13 @@
 
 | Check | Status | Evidence |
 |---|---|---|
-| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). |
-| Flutter tests | PASS | All 12 Flutter tests passed in PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). |
+| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, run [43037145721](https://github.com/fatoh112/taskaty/actions/runs/43037145721). |
+| Flutter tests | PASS | All 12 Flutter tests passed in run [43037145721](https://github.com/fatoh112/taskaty/actions/runs/43037145721). |
 | Worker typecheck and tests | PASS | Typecheck, 15 Worker tests, and npm audit passed in the same run. |
-| Android debug APK | PASS | `flutter build apk --debug` succeeded and the workflow confirmed the APK exists. |
-| APK artifact | PASS | [Download taskaty-debug-apk-23](https://github.com/fatoh112/taskaty/actions/runs/42948155099/artifacts/13824326068). Artifact archive: 86,917,352 bytes; SHA-256 `9c3ee62d0d3f11124f8632013ce06f3e509906058f0c44d0075a06d4dd7ea88a`; expires 2026-11-14 02:50:14 UTC. |
+| Android debug APK | PASS | `flutter build apk --debug` succeeded with Firebase app variables present and confirmed the APK exists. |
+| APK artifact | PASS | [Download taskaty-debug-apk-27](https://github.com/fatoh112/taskaty/actions/runs/43037145721/artifacts/13863512819). Artifact archive: 86,917,259 bytes; SHA-256 `2afaa74cb8a015559572a8b9e4f184b90e407f355fcf50894aff8df6c1f8fdde`; expires 2026-11-14 14:24:54 UTC. |
 
-This is a debug APK built without Firebase project values or a deployed Worker URL. It opens in the setup-required state until those public app configuration values are supplied. No release signing key is configured.
+This debug APK includes Firebase public app values but has no deployed Worker URL. Firebase runtime startup/auth were not physically tested, and account-backed API use remains unavailable until the Worker is deployed and configured. No release signing key is configured.
 
 ## Local checks
 
@@ -26,7 +26,7 @@ This is a debug APK built without Firebase project values or a deployed Worker U
 | Gradle Wrapper | PASS | Gradle 8.14.6 distribution was downloaded and checksum-verified by the successful CI APK build; the SHA-256 pin matches Gradle's official `.sha256` endpoint. |
 | Git whitespace check | PASS | `git diff --check` completed without errors for the latest build and documentation changes. |
 | Flutter/Dart analyzer and tests | PASS (CI) | GitHub Actions installed Flutter 3.47.0. `flutter analyze --no-fatal-infos` and all 12 `flutter test` cases passed. Flutter is not installed in the local Windows environment. |
-| Android debug APK | PASS (CI) | A debug APK was built and uploaded by PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). Release signing is not configured. |
+| Android debug APK | PASS (CI) | A Firebase-configured debug APK was built and uploaded by run [43037145721](https://github.com/fatoh112/taskaty/actions/runs/43037145721). Release signing is not configured. |
 | Cloudflare Free account/deployment | BLOCKED | A read-only Cloudflare connection sees no D1 database for Taskaty and one unrelated Worker. The connection cannot read account subscriptions because it lacks Billing Read scope, so the Free plan cannot be confirmed. No Taskaty resource was created. |
 | Firebase project and Android app | PASS | Firebase CLI identified existing project `taskaty-d3042` and registered `com.taskpulse.app` as app ID `1:476661033523:android:69e319439b3b5b6a351146`. Public app config was retrieved. |
 | Firebase Email/Password provider | PASS (CLI deployment); UNVERIFIED on device | Official Firebase CLI auth config deployed and reported the provider enabled. Auth flow code is implemented, but real registration, verification, login, and recovery have not been physically exercised. |
@@ -50,10 +50,10 @@ This is a debug APK built without Firebase project values or a deployed Worker U
 | H. Unauthorized team access is denied | PASS (local API harness) | An outsider receives `404 TEAM_NOT_FOUND` when listing another team's tasks. |
 | I. Arabic voice task after confirmation | UNVERIFIED on device | Parser and Flutter UI tests pass in CI, and the native speech/confirmation flow is implemented. Arabic recognition and confirmation have not been physically tested on an Android device. |
 | J. Reconnect restores task data | UNVERIFIED | Foreground refresh polls every 25 seconds and refreshes on resume; no offline cache or offline mutation queue is implemented. Flutter integration/network-recovery tests were not run. |
-| K. FCM on two physical devices | BLOCKED | No Firebase project/service credentials or physical devices configured. FCM mocks do not count as delivery verification. |
+| K. FCM on two physical devices | BLOCKED | No FCM server credential, deployed Worker, or physical devices configured. FCM mocks do not count as delivery verification. |
 | L. Spark and Workers Free only | PASS (architecture/audit) | Source uses Firebase Auth/FCM and Workers/D1/Cron free-plan features only. No paid resources or billing changes were made. Production account plan is unverified. |
 | M. No service requires enabling billing | PASS (design audit), account UNVERIFIED | No planned integration requires a paid plan. The account owner must preserve Spark/Workers Free; no account configuration was available to inspect. |
-| N. Installable APK builds | PASS (debug) | The APK built successfully in CI and is available as [artifact 13824326068](https://github.com/fatoh112/taskaty/actions/runs/42948155099/artifacts/13824326068). It is unsigned for release distribution. |
+| N. Installable APK builds | PASS (debug) | The Firebase-configured APK built successfully in CI and is available as [artifact 13863512819](https://github.com/fatoh112/taskaty/actions/runs/43037145721/artifacts/13863512819). It is unsigned for release distribution and does not have a Worker URL. |
 
 ## Scheduler load measurements
 
@@ -72,6 +72,6 @@ The 10-task run used 196 D1 calls and 554 SQL statements across 21 ticks, return
 - The local API harness uses SQLite through `sql.js`, not Cloudflare D1; it does not establish D1-specific SQL behavior, Worker CPU use, Cron timing, or service-account account policy.
 - FCM tests mock OAuth and HTTP v1 responses. They verify retry logic only, not external delivery.
 - Flutter sources and tests compile and pass in GitHub Actions; the local Windows environment still lacks Flutter and the Android SDK.
-- Firebase login, live D1 behavior, native Arabic voice recognition, notification tap routing, runtime RTL layout, and FCM delivery still need configured services and/or device verification.
-- A new CI build is required to verify the newly configured Firebase Dart defines. The Worker URL remains absent, so even a configured-Firebase APK will not connect to the TaskPulse API.
+- Firebase registration/login/verification, FCM token retrieval and delivery, live D1 behavior, native Arabic voice recognition, notification tap routing, and runtime RTL layout still need a deployed backend and/or device verification.
+- CI built an APK with Firebase Dart defines after the repository variables were set. The Worker URL remains absent, so the APK cannot connect to the TaskPulse API.
 - See [FREE_TIER_AUDIT.md](FREE_TIER_AUDIT.md) for the limits and quota exhaustion design. Do not treat this implementation audit as production certification.
