@@ -6,11 +6,11 @@
 
 | Check | Status | Evidence |
 |---|---|---|
-| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). |
-| Flutter tests | PASS | All 12 Flutter tests passed in PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). |
+| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). |
+| Flutter tests | PASS | All 12 Flutter tests passed in PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). |
 | Worker typecheck and tests | PASS | Typecheck, 15 Worker tests, and npm audit passed in the same run. |
 | Android debug APK | PASS | `flutter build apk --debug` succeeded and the workflow confirmed the APK exists. |
-| APK artifact | PASS | [Download taskaty-debug-apk-20](https://github.com/fatoh112/taskaty/actions/runs/42946057386/artifacts/13822444218). Artifact archive: 86,917,353 bytes; SHA-256 `94ba2c9c850f574bc2d5ec31f691ad41bb0eab1dcc6363e6107f009454349d8c`; expires 2026-11-14 02:37:57 UTC. |
+| APK artifact | PASS | [Download taskaty-debug-apk-23](https://github.com/fatoh112/taskaty/actions/runs/42948155099/artifacts/13824326068). Artifact archive: 86,917,352 bytes; SHA-256 `9c3ee62d0d3f11124f8632013ce06f3e509906058f0c44d0075a06d4dd7ea88a`; expires 2026-11-14 02:50:14 UTC. |
 
 This is a debug APK built without Firebase project values or a deployed Worker URL. It opens in the setup-required state until those public app configuration values are supplied. No release signing key is configured.
 
@@ -26,7 +26,7 @@ This is a debug APK built without Firebase project values or a deployed Worker U
 | Gradle Wrapper | PASS | Gradle 8.14.6 distribution was downloaded and checksum-verified by the successful CI APK build; the SHA-256 pin matches Gradle's official `.sha256` endpoint. |
 | Git whitespace check | PASS | `git diff --check` completed without errors for the latest build and documentation changes. |
 | Flutter/Dart analyzer and tests | PASS (CI) | GitHub Actions installed Flutter 3.47.0. `flutter analyze --no-fatal-infos` and all 12 `flutter test` cases passed. Flutter is not installed in the local Windows environment. |
-| Android debug APK | PASS (CI) | A debug APK was built and uploaded by PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). Release signing is not configured. |
+| Android debug APK | PASS (CI) | A debug APK was built and uploaded by PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). Release signing is not configured. |
 | Cloudflare Free account/deployment | BLOCKED | A read-only Cloudflare connection sees no D1 database for Taskaty and one unrelated Worker. The connection cannot read account subscriptions because it lacks Billing Read scope, so the Free plan cannot be confirmed. No Taskaty resource was created. |
 | Firebase/FCM live configuration | BLOCKED | No Firebase project/app configuration, service-account secret or device registration is available in this checkout. |
 | Cloudflare deployment/Cron observation | BLOCKED | The account's Free plan cannot be verified with the available OAuth scope. No Taskaty D1 database or Worker was deployed, so production Cron is unobserved. |
@@ -49,7 +49,7 @@ This is a debug APK built without Firebase project values or a deployed Worker U
 | K. FCM on two physical devices | BLOCKED | No Firebase project/service credentials or physical devices configured. FCM mocks do not count as delivery verification. |
 | L. Spark and Workers Free only | PASS (architecture/audit) | Source uses Firebase Auth/FCM and Workers/D1/Cron free-plan features only. No paid resources or billing changes were made. Production account plan is unverified. |
 | M. No service requires enabling billing | PASS (design audit), account UNVERIFIED | No planned integration requires a paid plan. The account owner must preserve Spark/Workers Free; no account configuration was available to inspect. |
-| N. Installable APK builds | PASS (debug) | The APK built successfully in CI and is available as [artifact 13822444218](https://github.com/fatoh112/taskaty/actions/runs/42946057386/artifacts/13822444218). It is unsigned for release distribution. |
+| N. Installable APK builds | PASS (debug) | The APK built successfully in CI and is available as [artifact 13824326068](https://github.com/fatoh112/taskaty/actions/runs/42948155099/artifacts/13824326068). It is unsigned for release distribution. |
 
 ## Scheduler load measurements
 
