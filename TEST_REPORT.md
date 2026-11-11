@@ -6,11 +6,11 @@
 
 | Check | Status | Evidence |
 |---|---|---|
-| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, PR run [43039841500](https://github.com/fatoh112/taskaty/actions/runs/43039841500). |
-| Flutter tests | PASS | All 12 Flutter tests passed in PR run [43039841500](https://github.com/fatoh112/taskaty/actions/runs/43039841500). |
+| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, PR run [43040964470](https://github.com/fatoh112/taskaty/actions/runs/43040964470). |
+| Flutter tests | PASS | All 12 Flutter tests passed in PR run [43040964470](https://github.com/fatoh112/taskaty/actions/runs/43040964470). |
 | Worker typecheck and tests | PASS | Typecheck, 15 Worker tests, and npm audit passed in the same run. |
 | Android debug APK | PASS | `flutter build apk --debug` succeeded with Firebase app variables present and confirmed the APK exists. |
-| APK artifact | PASS | [Download taskaty-debug-apk-30](https://github.com/fatoh112/taskaty/actions/runs/43039841500/artifacts/13864603572). Artifact archive: 86,917,263 bytes; SHA-256 `af24aa03393eae1533048a16fe79439d74ecb3a9d135e0618f46f367ccd3ec46`; expires 2026-11-14 14:40:32 UTC. |
+| APK artifact | PASS | [Download taskaty-debug-apk-31](https://github.com/fatoh112/taskaty/actions/runs/43040964470/artifacts/13865142793). Artifact archive: 86,917,258 bytes; SHA-256 `db4169948d02a9258001676973dbd174226d17ee77029963468b355a1ef90a5f`; expires 2026-11-14 14:47:59 UTC. |
 
 This debug APK includes Firebase public app values but has no deployed Worker URL. Firebase runtime startup/auth were not physically tested, and account-backed API use remains unavailable until the Worker is deployed and configured. No release signing key is configured.
 
@@ -26,14 +26,14 @@ This debug APK includes Firebase public app values but has no deployed Worker UR
 | Gradle Wrapper | PASS | Gradle 8.14.6 distribution was downloaded and checksum-verified by the successful CI APK build; the SHA-256 pin matches Gradle's official `.sha256` endpoint. |
 | Git whitespace check | PASS | `git diff --check` completed without errors for the latest build and documentation changes. |
 | Flutter/Dart analyzer and tests | PASS (CI) | GitHub Actions installed Flutter 3.47.0. `flutter analyze --no-fatal-infos` and all 12 `flutter test` cases passed. Flutter is not installed in the local Windows environment. |
-| Android debug APK | PASS (CI) | A Firebase-configured debug APK was built and uploaded by PR run [43039841500](https://github.com/fatoh112/taskaty/actions/runs/43039841500). Release signing is not configured. |
-| Cloudflare Free account/deployment | BLOCKED | A read-only Cloudflare connection sees no D1 database for Taskaty and one unrelated Worker. The connection cannot read account subscriptions because it lacks Billing Read scope, so the Free plan cannot be confirmed. No Taskaty resource was created. |
+| Android debug APK | PASS (CI) | A Firebase-configured debug APK was built and uploaded by PR run [43040964470](https://github.com/fatoh112/taskaty/actions/runs/43040964470). Release signing is not configured. |
+| Cloudflare Free account/deployment | BLOCKED | Read-only account settings returned `default_usage_model: standard`, which does not identify the Workers plan. `GET /accounts/{account_id}/subscriptions` returned 403; the connector lacks Billing Read. The D1 inventory is empty and the only Worker found is unrelated. Local `cf auth whoami` reports not logged in. No Taskaty resource was created. |
 | Firebase project and Android app | PASS | Firebase CLI identified existing project `taskaty-d3042` and registered `com.taskpulse.app` as app ID `1:476661033523:android:69e319439b3b5b6a351146`. Public app config was retrieved. |
 | Firebase Email/Password provider | PASS (CLI deployment); UNVERIFIED on device | Official Firebase CLI auth config deployed and reported the provider enabled. Auth flow code is implemented, but real registration, verification, login, and recovery have not been physically exercised. |
 | Firebase Spark plan | UNVERIFIED | Firebase CLI does not expose project billing plan. Verify Firebase Console → Project settings → Usage and billing shows Spark and no billing account is linked. No billing changes were made. |
 | GitHub Actions Firebase variables | PASS | All four public Firebase Android app values are set as repository Actions variables. The Worker URL remains unset. |
 | FCM HTTP v1 and server credentials | BLOCKED | FCM is listed as no-cost on Spark, but project HTTP v1 readiness has not been checked. No service account has been created and no Worker Secret is configured. Cloudflare plan is also unverified. |
-| Cloudflare deployment/Cron observation | BLOCKED | The account's Free plan cannot be verified with the available OAuth scope. No Taskaty D1 database or Worker was deployed, so production Cron is unobserved. |
+| Cloudflare deployment/Cron observation | BLOCKED | The account's Free plan cannot be verified with the available OAuth scope, and the local `cf` CLI is unauthenticated. No Taskaty D1 database or Worker was deployed, so production Cron CPU, D1 usage, scheduler success, and `/health` are unobserved. |
 | Physical two-device push acceptance | BLOCKED | Requires a configured Firebase Spark project, Worker deployment and two Android devices with Google Play services. |
 
 ## Acceptance criteria
@@ -53,7 +53,7 @@ This debug APK includes Firebase public app values but has no deployed Worker UR
 | K. FCM on two physical devices | BLOCKED | No FCM server credential, deployed Worker, or physical devices configured. FCM mocks do not count as delivery verification. |
 | L. Spark and Workers Free only | PASS (architecture/audit) | Source uses Firebase Auth/FCM and Workers/D1/Cron free-plan features only. No paid resources or billing changes were made. Production account plan is unverified. |
 | M. No service requires enabling billing | PASS (design audit), account UNVERIFIED | No planned integration requires a paid plan. The account owner must preserve Spark/Workers Free; no account configuration was available to inspect. |
-| N. Installable APK builds | PASS (debug) | The Firebase-configured APK built successfully in CI and is available as [artifact 13864603572](https://github.com/fatoh112/taskaty/actions/runs/43039841500/artifacts/13864603572). It is unsigned for release distribution and does not have a Worker URL. |
+| N. Installable APK builds | PASS (debug) | The Firebase-configured APK built successfully in CI and is available as [artifact 13865142793](https://github.com/fatoh112/taskaty/actions/runs/43040964470/artifacts/13865142793). It is unsigned for release distribution and does not have a Worker URL. |
 
 ## Scheduler load measurements
 
@@ -74,4 +74,5 @@ The 10-task run used 196 D1 calls and 554 SQL statements across 21 ticks, return
 - Flutter sources and tests compile and pass in GitHub Actions; the local Windows environment still lacks Flutter and the Android SDK.
 - Firebase registration/login/verification, FCM token retrieval and delivery, live D1 behavior, native Arabic voice recognition, notification tap routing, and runtime RTL layout still need a deployed backend and/or device verification.
 - CI built an APK with Firebase Dart defines after the repository variables were set. The Worker URL remains absent, so the APK cannot connect to the TaskPulse API.
+- Cloudflare plan verification requires an owner-visible dashboard check or a new authorized read-only connection with Billing Read. The Workers Free plan is not inferred from the account's `standard` usage model.
 - See [FREE_TIER_AUDIT.md](FREE_TIER_AUDIT.md) for the limits and quota exhaustion design. Do not treat this implementation audit as production certification.
