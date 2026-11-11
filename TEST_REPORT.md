@@ -28,7 +28,11 @@ This is a debug APK built without Firebase project values or a deployed Worker U
 | Flutter/Dart analyzer and tests | PASS (CI) | GitHub Actions installed Flutter 3.47.0. `flutter analyze --no-fatal-infos` and all 12 `flutter test` cases passed. Flutter is not installed in the local Windows environment. |
 | Android debug APK | PASS (CI) | A debug APK was built and uploaded by PR run [42948155099](https://github.com/fatoh112/taskaty/actions/runs/42948155099). Release signing is not configured. |
 | Cloudflare Free account/deployment | BLOCKED | A read-only Cloudflare connection sees no D1 database for Taskaty and one unrelated Worker. The connection cannot read account subscriptions because it lacks Billing Read scope, so the Free plan cannot be confirmed. No Taskaty resource was created. |
-| Firebase/FCM live configuration | BLOCKED | No Firebase project/app configuration, service-account secret or device registration is available in this checkout. |
+| Firebase project and Android app | PASS | Firebase CLI identified existing project `taskaty-d3042` and registered `com.taskpulse.app` as app ID `1:476661033523:android:69e319439b3b5b6a351146`. Public app config was retrieved. |
+| Firebase Email/Password provider | PASS (CLI deployment); UNVERIFIED on device | Official Firebase CLI auth config deployed and reported the provider enabled. Auth flow code is implemented, but real registration, verification, login, and recovery have not been physically exercised. |
+| Firebase Spark plan | UNVERIFIED | Firebase CLI does not expose project billing plan. Verify Firebase Console → Project settings → Usage and billing shows Spark and no billing account is linked. No billing changes were made. |
+| GitHub Actions Firebase variables | PASS | All four public Firebase Android app values are set as repository Actions variables. The Worker URL remains unset. |
+| FCM HTTP v1 and server credentials | BLOCKED | FCM is listed as no-cost on Spark, but project HTTP v1 readiness has not been checked. No service account has been created and no Worker Secret is configured. Cloudflare plan is also unverified. |
 | Cloudflare deployment/Cron observation | BLOCKED | The account's Free plan cannot be verified with the available OAuth scope. No Taskaty D1 database or Worker was deployed, so production Cron is unobserved. |
 | Physical two-device push acceptance | BLOCKED | Requires a configured Firebase Spark project, Worker deployment and two Android devices with Google Play services. |
 
@@ -69,5 +73,5 @@ The 10-task run used 196 D1 calls and 554 SQL statements across 21 ticks, return
 - FCM tests mock OAuth and HTTP v1 responses. They verify retry logic only, not external delivery.
 - Flutter sources and tests compile and pass in GitHub Actions; the local Windows environment still lacks Flutter and the Android SDK.
 - Firebase login, live D1 behavior, native Arabic voice recognition, notification tap routing, runtime RTL layout, and FCM delivery still need configured services and/or device verification.
-- The CI APK is built with empty optional public configuration unless repository Actions variables are set; it does not prove Firebase or Worker connectivity.
+- A new CI build is required to verify the newly configured Firebase Dart defines. The Worker URL remains absent, so even a configured-Firebase APK will not connect to the TaskPulse API.
 - See [FREE_TIER_AUDIT.md](FREE_TIER_AUDIT.md) for the limits and quota exhaustion design. Do not treat this implementation audit as production certification.

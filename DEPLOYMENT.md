@@ -6,21 +6,22 @@ This repository is configured for permanent no-cost plans only. Do not attach Cl
 
 `.github/workflows/android-build.yml` runs on manual dispatch, relevant pushes, and pull requests to `main`. It uses the standard `ubuntu-24.04` hosted runner, Java 17, Android SDK API 36, and Flutter stable 3.47.0. GitHub documents standard hosted runners as free on public repositories; this workflow does not use larger runners or a paid build service. The debug APK artifact is retained for 3 days.
 
-The workflow always supports an unconfigured build. It skips Firebase initialization and shows the setup-required screen when configuration is absent. To create a configured test APK, add the following repository **Actions variables** (Settings → Secrets and variables → Actions → Variables):
+The workflow always supports a build without a backend URL. Firebase options are already set as repository **Actions variables** (Settings → Secrets and variables → Actions → Variables):
 
 - `TASKPULSE_API_URL`: deployed HTTPS `workers.dev` API base URL.
 - `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, `TASKPULSE_FIREBASE_SENDER_ID`: public settings for the registered Android Firebase app with package `com.taskpulse.app`.
 
-These app settings are compiled into the APK by design. Do not add an FCM service-account JSON/private key, Cloudflare API token, or other server credential to Actions variables or the Android build. Those credentials belong only in Cloudflare Worker Secrets. If variables are unset, the APK is an unconfigured setup-required build and does not provide authentication or remote task storage. Download the APK from the `taskaty-debug-apk-*` artifact on a successful run. Artifact access follows GitHub sign-in and repository access rules.
+These public app settings are compiled into the APK by design. The public Worker URL variable `TASKPULSE_API_URL` remains unset, so account-backed API use is not available yet. Do not add an FCM service-account JSON/private key, Cloudflare API token, or other server credential to Actions variables or the Android build. Those credentials belong only in Cloudflare Worker Secrets. Download the APK from the `taskaty-debug-apk-*` artifact on a successful run. Artifact access follows GitHub sign-in and repository access rules.
 
 ## 1. Firebase Spark
 
-1. Create/select a Firebase project that remains on Spark, with no Cloud Billing account linked.
-2. Register Android package `com.taskpulse.app`.
-3. Enable Firebase Authentication email/password. Configure verification and password reset templates.
-4. Enable Firebase Cloud Messaging. Android push requires a device/emulator with Google Play services and notification permission.
-5. In Firebase Project settings, copy the public app values: Web API key, Android App ID, Project ID and sender ID. The Flutter client initializes Firebase from Dart defines; `google-services.json` is not required by this project.
-6. For server push, use the project's service account only if the account lets you create/use it on Spark. Grant only the FCM send permission. Never copy its private key into this repository, APK, or chat. If key creation is blocked by policy, report that blocker and keep push sending unconfigured; do not change plans.
+The existing project was identified using the authenticated Firebase CLI as `taskaty-d3042` (`taskaty`). Its billing plan could not be read from the CLI; this project is **not confirmed Spark** yet. Before production use, verify in Firebase Console → Project settings → Usage and billing that the plan is Spark and that no Cloud Billing account is linked. Do not link one or upgrade to Identity Platform.
+
+The CLI registered Android package `com.taskpulse.app` as app ID `1:476661033523:android:69e319439b3b5b6a351146`. `firebase.json` contains the Email/Password provider configuration and `.firebaserc` selects this project. `firebase deploy --only auth --project taskaty-d3042` completed and reported `Auth providers enabled: email/password`. The CLI created a `Default Web App` while provisioning Auth; no duplicate Android app was created. Firebase Auth verification and password-reset emails are implemented in Flutter. Their device flow has not yet been physically tested.
+
+The public Android app values were retrieved with `firebase apps:sdkconfig`. The repository Actions variables `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, and `TASKPULSE_FIREBASE_SENDER_ID` are set. No `google-services.json` is needed: the Flutter app initializes `FirebaseOptions` from these Dart defines. The Worker URL variable `TASKPULSE_API_URL` remains unset until a verified Cloudflare Free Worker is deployed.
+
+Firebase lists Authentication (most options) and Cloud Messaging as no-cost products on Spark; FCM itself has no charge. The project’s FCM HTTP v1 API readiness has not been verified, and no server credential is configured. Check Firebase Console → Project settings → Cloud Messaging for HTTP v1 status. For server push, only create/use an FCM service account if permitted on Spark and after verifying Cloudflare Workers Free; store it only as a Worker Secret with minimum FCM send permissions. Never put its private key in this repository, GitHub Actions, APK, or chat. If key creation or API access requires billing, keep server push disabled.
 
 ## 2. Local Worker development
 
