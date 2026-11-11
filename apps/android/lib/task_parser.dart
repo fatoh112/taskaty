@@ -144,7 +144,7 @@ class TaskParser {
   static bool _containsName(String text, String name) {
     final normalized = _normalize(text).toLowerCase();
     final candidate = _normalize(name).toLowerCase().trim();
-    return candidate.isNotEmpty && RegExp(r'(^|[\\s،,])(?:ل|على)?' + RegExp.escape(candidate) + r'(?=$|[\\s،,])').hasMatch(normalized);
+    return candidate.isNotEmpty && RegExp(r'(^|[\s،,])(?:ل|على)?' + RegExp.escape(candidate) + r'(?=$|[\s،,])').hasMatch(normalized);
   }
   static String _replaceName(String text, String name) => text.replaceAll(RegExp(r'(?:^|[\s،,])(?:ل|على)?' + RegExp.escape(_normalize(name)) + r'(?=$|[\s،,])', caseSensitive: false), ' ');
   static int _to24Hour(int hour, String text) {
