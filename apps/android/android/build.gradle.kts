@@ -2,7 +2,7 @@ allprojects {
     repositories { google(); mavenCentral() }
 }
 
-val sharedBuildDir = rootProject.layout.buildDirectory.dir("../build").get()
+val sharedBuildDir = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(sharedBuildDir)
 subprojects {
     project.layout.buildDirectory.value(sharedBuildDir.dir(project.name))
