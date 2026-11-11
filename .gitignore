@@ -1,0 +1,39 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/build/
+**/.gradle/
+**/local.properties
+**/Generated.xcconfig
+**/Flutter/*.framework
+**/Flutter/*.podspec
+
+# Node / Cloudflare
+node_modules/
+**/node_modules/
+.cloudflare/
+.dev.vars*
+.env
+.env.*
+!.env.example
+.wrangler/
+.dev.vars
+backend/worker/.env
+backend/worker/.env.*
+!backend/worker/.env.example
+
+# Local credentials and signing material
+google-services.json
+service-account*.json
+firebase-adminsdk-*.json
+*.jks
+*.keystore
+*.p12
+*.pem
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

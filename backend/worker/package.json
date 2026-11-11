@@ -1,0 +1,26 @@
+{
+  "name": "taskpulse-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cf dev",
+    "build": "cf build",
+    "deploy": "cf deploy",
+    "db:migrate:local": "cf d1 migrations apply 00000000-0000-4000-8000-000000000003 --dir ../migrations --local --mode development",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../tests/vitest.config.ts",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^2.0.0-beta.v.14",
+    "@cloudflare/workers-types": "5.20261110.1",
+    "@types/node": "^24.10.0",
+    "@types/sql.js": "^1.4.9",
+    "cf": "1.0.0-beta.29",
+    "sql.js": "^1.13.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
+  }
+}

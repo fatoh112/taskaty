@@ -1,0 +1,16 @@
+{
+  "name": "taskpulse",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend/worker"
+  ],
+  "scripts": {
+    "test:worker": "npm --workspace taskpulse-worker test",
+    "typecheck:worker": "npm --workspace taskpulse-worker run typecheck"
+  },
+  "allowScripts": {
+    "workerd@1.20261110.1": true,
+    "esbuild@0.28.2": true
+  }
+}
