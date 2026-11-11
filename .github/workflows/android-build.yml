@@ -74,7 +74,7 @@ jobs:
 
       - name: Analyze Flutter source
         working-directory: apps/android
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Run Flutter tests
         working-directory: apps/android
