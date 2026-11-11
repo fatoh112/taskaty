@@ -43,10 +43,12 @@ npm run typecheck
 
 The public GitHub Actions workflow uses a standard `ubuntu-24.04` runner, runs Flutter analysis/tests and Worker checks, builds a debug APK, and retains the artifact for 3 days. Configure the repository Actions variables `TASKPULSE_API_URL`, `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, and `TASKPULSE_FIREBASE_SENDER_ID` for a configured test build. These are client-side Firebase app settings and the public Worker URL; never put a service-account private key or other backend credential in these variables. If unset, the APK shows the setup-required state.
 
+Latest verified debug APK: [download from run 42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386/artifacts/13822444218) (artifact expires 2026-11-14 02:37:57 UTC). See [TEST_REPORT.md](TEST_REPORT.md) for the exact checks and remaining live-service/device verification.
+
 ## Security model
 
 The app sends a Firebase ID token in `Authorization: Bearer …` for every API operation. The Worker validates the RS256 signature and Firebase claims, derives the UID from the verified token, and checks team membership from D1 before reading or changing team data. Task deadlines use Worker server time. Notification history is stored per recipient in D1; FCM is a best-effort delivery channel.
 
 ## Current state
 
-The repository contains the Flutter client, Worker API, D1 migrations, Cron/outbox implementation, and automated tests. Worker typechecking and all 15 SQL.js API/scheduler tests pass locally; cf build and a local cf dev D1/Cron smoke check also pass. Public GitHub Actions is validating Flutter analysis/tests and producing the debug APK; see TEST_REPORT.md for current CI status. Firebase and Cloudflare production accounts are not configured here, so deployment and physical FCM verification remain unverified.
+The repository contains the Flutter client, Worker API, D1 migrations, Cron/outbox implementation, and automated tests. Worker typechecking and all 15 SQL.js API/scheduler tests pass locally; `cf build` and a local `cf dev` D1/Cron smoke check also pass. GitHub Actions run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386) passed Flutter analysis, all 12 Flutter tests, Worker checks, npm audit, and the Android debug APK build. Firebase and Cloudflare production accounts are not configured here, so deployment and physical FCM verification remain unverified.

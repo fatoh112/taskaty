@@ -2,6 +2,18 @@
 
 **Date:** 2026-11-11 (Africa/Cairo)
 
+## GitHub Actions verification
+
+| Check | Status | Evidence |
+|---|---|---|
+| Flutter analysis | PASS | Flutter 3.47.0, `flutter analyze --no-fatal-infos`, PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). |
+| Flutter tests | PASS | All 12 Flutter tests passed in PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). |
+| Worker typecheck and tests | PASS | Typecheck, 15 Worker tests, and npm audit passed in the same run. |
+| Android debug APK | PASS | `flutter build apk --debug` succeeded and the workflow confirmed the APK exists. |
+| APK artifact | PASS | [Download taskaty-debug-apk-20](https://github.com/fatoh112/taskaty/actions/runs/42946057386/artifacts/13822444218). Artifact archive: 86,917,353 bytes; SHA-256 `94ba2c9c850f574bc2d5ec31f691ad41bb0eab1dcc6363e6107f009454349d8c`; expires 2026-11-14 02:37:57 UTC. |
+
+This is a debug APK built without Firebase project values or a deployed Worker URL. It opens in the setup-required state until those public app configuration values are supplied. No release signing key is configured.
+
 ## Local checks
 
 | Check | Status | Evidence / limits |
@@ -11,10 +23,10 @@
 | Dependency security audit | PASS | `npm audit`: zero known vulnerabilities in the installed npm dependency tree at audit time. Flutter/pub packages were not resolved or scanned locally. |
 | Cloudflare Worker build | PASS | `npm --workspace taskpulse-worker run build` completed via the official `cf build` and Cloudflare Vite plugin. A checksum-verified portable Node 24.22.2 was used because the system Node is 24.18. |
 | Cloudflare local D1 and Cron | PASS (local emulation) | `cf d1 migrations apply ... --local` applied `0001_initial.sql`; `cf dev` exposed the configured D1 binding and `* * * * *` trigger. Invoking the local scheduled handler returned `outcome: ok`; `/health` then showed a successful heartbeat. This used empty local D1 and no external push. |
-| Gradle Wrapper files | PASS | The Gradle 8.13 wrapper JAR SHA-256 matched Gradle's published checksum; scripts and distribution checksum are included. This is not an APK build. |
-| Git whitespace check | PASS | `git diff --cached --check` completed without errors on the complete staged patch. |
-| Flutter/Dart analyzer and tests | FAIL (first CI attempt) | GitHub Actions installed Flutter 3.47.0 and found analyzer errors in the voice screen, parser and widget trees. Those issues have been patched; the updated branch still needs a green CI run. Flutter tests were skipped after analysis failed. |
-| Android debug APK | BLOCKED | Flutter and Android SDK/platform tools are absent; no APK artifact exists. Release signing is also not configured. |
+| Gradle Wrapper | PASS | Gradle 8.14.6 distribution was downloaded and checksum-verified by the successful CI APK build; the SHA-256 pin matches Gradle's official `.sha256` endpoint. |
+| Git whitespace check | PASS | `git diff --check` completed without errors for the latest build and documentation changes. |
+| Flutter/Dart analyzer and tests | PASS (CI) | GitHub Actions installed Flutter 3.47.0. `flutter analyze --no-fatal-infos` and all 12 `flutter test` cases passed. Flutter is not installed in the local Windows environment. |
+| Android debug APK | PASS (CI) | A debug APK was built and uploaded by PR run [42946057386](https://github.com/fatoh112/taskaty/actions/runs/42946057386). Release signing is not configured. |
 | Cloudflare Free account/deployment | BLOCKED | No Cloudflare account session or production D1 resource is configured. The local emulator is not a deployed account and does not measure the account's Free CPU/quota behavior. |
 | Firebase/FCM live configuration | BLOCKED | No Firebase project/app configuration, service-account secret or device registration is available in this checkout. |
 | Cloudflare deployment/Cron observation | BLOCKED | No Cloudflare account session or D1 resource is configured. No Worker was deployed. |
@@ -28,16 +40,16 @@
 | B. Assign a four-hour task | PASS (local API harness) | Test creates a 240-minute task assigned to a second team member and checks server-computed due time. |
 | C. Both accounts see saved task | PASS (local API harness) | The owner and joined member each list the same stored task from the SQL.js-backed D1 test adapter. |
 | D. Completion before deadline creates no overdue event | PASS (local scheduler harness) | Completion is persisted, then scheduled worker logic runs after the deadline and creates no overdue event. |
-| E. Cron detects overdue with app closed | UNVERIFIED in production | Scheduler function tests detect overdue work without an app/client; the local Cloudflare scheduler handler was also invoked successfully against its local D1 schema. No overdue task was seeded in that emulator, and production Cloudflare Cron has not been observed. |
+| E. Cron detects overdue with app closed | PASS (local harness); UNVERIFIED in production | Scheduler tests detect overdue work without an app/client and the load harness simulates delayed Cron runs. A local `cf dev` scheduled-handler smoke check passed, but production Cloudflare Cron has not been deployed or observed. |
 | F. Team gets persistent notification records | PASS (local API harness) | Test verifies notification rows are persisted for team members and available from the authenticated notification endpoint. |
 | G. Repeated Cron creates one logical overdue event | PASS (local scheduler harness) | Two scheduler runs yield one unique `deadline_events` record and one notification per recipient. |
 | H. Unauthorized team access is denied | PASS (local API harness) | An outsider receives `404 TEAM_NOT_FOUND` when listing another team's tasks. |
-| I. Arabic voice task after confirmation | UNVERIFIED | Native speech and confirmation UI are implemented; parser/widget tests are written but cannot run without Flutter. No device recognition test was done. |
+| I. Arabic voice task after confirmation | UNVERIFIED on device | Parser and Flutter UI tests pass in CI, and the native speech/confirmation flow is implemented. Arabic recognition and confirmation have not been physically tested on an Android device. |
 | J. Reconnect restores task data | UNVERIFIED | Foreground refresh polls every 25 seconds and refreshes on resume; no offline cache or offline mutation queue is implemented. Flutter integration/network-recovery tests were not run. |
 | K. FCM on two physical devices | BLOCKED | No Firebase project/service credentials or physical devices configured. FCM mocks do not count as delivery verification. |
 | L. Spark and Workers Free only | PASS (architecture/audit) | Source uses Firebase Auth/FCM and Workers/D1/Cron free-plan features only. No paid resources or billing changes were made. Production account plan is unverified. |
 | M. No service requires enabling billing | PASS (design audit), account UNVERIFIED | No planned integration requires a paid plan. The account owner must preserve Spark/Workers Free; no account configuration was available to inspect. |
-| N. Installable APK builds | BLOCKED | Flutter/Dart and Android SDK are absent, so no APK was built. |
+| N. Installable APK builds | PASS (debug) | The APK built successfully in CI and is available as [artifact 13822444218](https://github.com/fatoh112/taskaty/actions/runs/42946057386/artifacts/13822444218). It is unsigned for release distribution. |
 
 ## Scheduler load measurements
 
@@ -55,6 +67,7 @@ The 10-task run used 196 D1 calls and 554 SQL statements across 21 ticks, return
 
 - The local API harness uses SQLite through `sql.js`, not Cloudflare D1; it does not establish D1-specific SQL behavior, Worker CPU use, Cron timing, or service-account account policy.
 - FCM tests mock OAuth and HTTP v1 responses. They verify retry logic only, not external delivery.
-- Flutter source and test files are present but uncompiled. Firebase login, voice recognition, notification tap routing and RTL layout need Flutter/device verification.
-- The repository contains an Android project scaffold but no Flutter-generated dependency lockfile, Android SDK, or APK output.
+- Flutter sources and tests compile and pass in GitHub Actions; the local Windows environment still lacks Flutter and the Android SDK.
+- Firebase login, live D1 behavior, native Arabic voice recognition, notification tap routing, runtime RTL layout, and FCM delivery still need configured services and/or device verification.
+- The CI APK is built with empty optional public configuration unless repository Actions variables are set; it does not prove Firebase or Worker connectivity.
 - See [FREE_TIER_AUDIT.md](FREE_TIER_AUDIT.md) for the limits and quota exhaustion design. Do not treat this implementation audit as production certification.
