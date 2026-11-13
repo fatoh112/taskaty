@@ -3,6 +3,21 @@
 **Updated:** 2026-11-13 (Africa/Cairo)
 **Scope:** Connected Flutter Web acceptance, native Android APK delivery, Cloudflare Free CPU reduction, live Cron, D1 usage, and notifications. No service was upgraded and no billing was activated.
 
+## Android UI quality pass (2026-11-13)
+
+**Confirmed dropdown root cause:** `SelectTeamCard` used `DropdownButton<Team>` and stored a `Team` object in `activeTeamProvider`. `Team` has no value equality, so a refresh that decoded a new object for the same team ID left the dropdown value unmatched by its refreshed items. Flutter then raised the reported “exactly one item” assertion. The selector now uses unique non-empty team IDs as dropdown values, and `teamsProvider` synchronizes the active state to the canonical object returned by the latest server list. Deleted selections resolve to the first current team or `null`; the widget itself does not mutate provider state during build.
+
+**Overflow evidence:** The reported `BOTTOM OVERFLOWED BY 93572 PIXELS` was not accompanied by an Android stack trace or a native screenshot in this checkout. Its exact source is therefore **UNVERIFIED**, and it cannot safely be attributed only to the dropdown error screen. An independent dashboard test did reproduce a real 11-pixel bottom overflow in a statistics tile at 320×568, Arabic, dark theme, text scale 1.0. The tile's fixed 112-pixel height was too short for Arabic font metrics. Its height now expands with text scale from 136 pixels, and the dashboard matrix passes. The task list's fixed-height `Column` was replaced with one refreshable sliver scroll view, while task cards constrain long titles, assignees, and countdowns. Automated Flutter widget rendering reported no exceptions or layout overflows across these cases:
+
+- Task list and shell: 320×568, 360×640, 393×852, 412×915, 915×412 landscape, and 800×1024 tablet; Arabic and English; text scale 1.0, 1.3, and 1.6; light and dark themes (72 combinations).
+- Dashboard summary/statistics: 320×568, 393×852, and 800×1024; Arabic and English; text scale 1.0 and 1.6; light and dark themes (24 combinations).
+- Login and team onboarding: 320×568, 393×852, and 800×1024; Arabic and English; text scale 1.0 and 1.6; simulated keyboard inset on and off (48 combinations).
+- Team selector regression coverage: stale same-ID objects, provider synchronization after refresh, deleted selection, duplicate and empty IDs, no teams, selecting a team, and task-list refresh after switching teams.
+
+The full Flutter test suite passed **23 tests** across 144 responsive combinations. `flutter analyze --no-fatal-infos` exited 0 with **91 info-level lints/deprecation notices and no warnings or errors**. `flutter pub get` passed. `flutter build web --release` passed in 102.4 seconds as a compatibility build; it was not a connected browser acceptance run. Worker typecheck passed and its five test files reported 20 passing tests. No backend source or production data changed.
+
+The only locally visible Flutter devices were Windows, Chrome, and Edge. Native Android install, logcat review, system-bar/keyboard behavior on an actual device, microphone recognition, and physical screenshots are **UNVERIFIED**. Android APK build and signature checks are pending the next GitHub Actions run after this UI change is pushed.
+
 ## Native Android APK delivery (2026-11-13)
 
 The APKs were built by GitHub Actions run [#43425005303](https://github.com/fatoh112/taskaty/actions/runs/43425005303) from PR head `71f24b4eb09fb6c1c301c006dfde7dee4a81e19c`. The run completed successfully, validated the APK signatures and compiled manifest metadata, then uploaded artifact `taskaty-android-full-apk-42`. Download it from [the GitHub Actions artifact](https://github.com/fatoh112/taskaty/actions/runs/43425005303/artifacts/14037491075); it expires at **2026-11-16 12:33:21 UTC**. The ZIP is 117,228,695 bytes.
