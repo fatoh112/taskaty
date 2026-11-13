@@ -1,7 +1,24 @@
 # Taskaty verification report
 
 **Updated:** 2026-11-13 (Africa/Cairo)
-**Scope:** Connected Flutter Web acceptance, Cloudflare Free CPU reduction, live Cron, D1 usage, and notifications. No service was upgraded and no billing was activated.
+**Scope:** Connected Flutter Web acceptance, native Android APK delivery, Cloudflare Free CPU reduction, live Cron, D1 usage, and notifications. No service was upgraded and no billing was activated.
+
+## Native Android APK delivery (2026-11-13)
+
+The APKs were built by GitHub Actions run [#43422046254](https://github.com/fatoh112/taskaty/actions/runs/43422046254) from PR head `fff8c37f8e61493b7ebab79e5ba323bb4e7a8803`. The run completed successfully, validated the APK signatures and compiled manifest metadata, then uploaded artifact `taskaty-android-full-apk-41`. Download it from [the GitHub Actions artifact](https://github.com/fatoh112/taskaty/actions/runs/43422046254/artifacts/14034807951); it expires at **2026-11-16 12:11:14 UTC**. The ZIP is 117,228,705 bytes.
+
+| Artifact file | Status | Size | SHA-256 |
+|---|---|---:|---|
+| `taskaty-android-debug.apk` | PASS | 167,666,289 bytes | `b3ae165430537fd82863efde27ae9359bb74620852435b35d9054ed3c04bc912` |
+| `taskaty-android-release-debug-signed.apk` | PASS (release mode, debug signed) | 61,282,729 bytes | `280d645047e3f2fe2245d49d511f3f018e79a911b9b6e97091ee276e620de61c` |
+
+Both APKs declare package `com.taskpulse.app`, version `1.0.0+1`, and minimum SDK 24 (Android 7.0). `apksigner` verified APK Signature Scheme v2 and one signer for each APK. The archived checksum file matches SHA-256 values independently computed after downloading and extracting the uploaded artifact. The run validated that the existing GitHub Actions variables match Firebase project `taskaty-d3042`, Android app ID `1:476661033523:android:69e319439b3b5b6a351146`, sender ID `476661033523`, and the deployed HTTPS Worker URL; those values were passed to the build via a temporary Dart-defines file. No service-account or signing private key was placed in the APK.
+
+Flutter analysis, 13 Flutter tests, Worker typecheck, 20 Worker tests, and `npm audit --audit-level=high` all passed in the successful CI run. Local Flutter analysis reported 48 informational lints/deprecations and no warnings/errors. `flutter build web --release` also succeeded locally. The first validation attempts exposed that `flutter_local_notifications` 22.3.3 requires API 24; the app's declared minimum was corrected from 23 to 24, and the final build verified API 24 in both compiled manifests.
+
+No Android SDK/ADB, emulator, or physical Android device was available locally (`flutter devices` listed only Windows, Chrome, and Edge). Therefore APK installation, Android Firebase login, Android task mutations, microphone speech recognition, notification tap routing, FCM token registration, offline recovery, and physical push delivery remain **UNVERIFIED on Android**. The real Firebase authentication, API, task, D1 persistence, notification-history, and cross-team workflows listed below were tested through Flutter Web; they are not evidence of Android runtime or physical push verification. The Worker `/health` endpoint returned HTTP 200 on 2026-11-13 12:22:59 UTC, with `status: ok`, Cron last finished at 12:22:54 UTC, and `lastErrorCode: null`.
+
+The release-mode APK currently uses the generated Android debug signing key and is not production-signed. No persistent release keystore was created. Secure key-generation and GitHub Actions secret handling steps are documented in [docs/ANDROID_RELEASE_SIGNING.md](docs/ANDROID_RELEASE_SIGNING.md); owner approval is still needed before creating the persistent key.
 
 ## Resumed Flutter Web acceptance (2026-11-13)
 
@@ -32,6 +49,7 @@ Tests used two existing, real Firebase email/password accounts on the registered
 | Worker typecheck | PASS | `npm run typecheck` exited 0. |
 | Worker tests | PASS | `npm test`: 5 files, 20 tests passed, including exact-origin preflight, rejected foreign origins, and CORS on authenticated API errors. |
 | Automatic Android CI for this push | CANCELLED before APK | GitHub queued [run #43415666260](https://github.com/fatoh112/taskaty/actions/runs/43415666260); it was cancelled during Flutter setup under the Web-only no-APK instruction. The APK build and upload steps were skipped. The local checks above were run directly and passed. |
+| Current native Android APK CI | PASS | [Run #43422046254](https://github.com/fatoh112/taskaty/actions/runs/43422046254) built and validated universal debug and release-mode APKs from PR head `fff8c37`; see the Android delivery section above. |
 
 The two disposable QA Firebase accounts were deleted after real password reauthentication. Their two exact QA teams were removed from D1; cascading cleanup removed invitations, tasks, activity, and notifications. QA-specific API rate-limit buckets and local app/Firebase action-site data in both disposable browser profiles were also cleared. A read-only follow-up query returned zero QA team, user, task, notification, activity, invitation, device-token, and rate-limit rows. The owner's personal Firebase account and unrelated production data were not changed.
 
@@ -47,7 +65,7 @@ The two disposable QA Firebase accounts were deleted after real password reauthe
 | Existing live account/API smoke | PASS (previous scheduler run) | Two temporary Firebase email/password accounts exercised team/task APIs. The resumed browser acceptance above additionally verified the user-facing email-verification and password-reset flows. |
 | Assignment notification history | PASS (live Web and D1) | Assignment and completion notifications appeared in the assignee's browser history after refresh and matched read-only D1 rows. |
 | FCM server authentication | PASS (previous run); delivery UNVERIFIED | Worker credentials are secrets only. An intentionally invalid token reached FCM HTTP v1 and returned HTTP 400, confirming OAuth/server connectivity but not delivery. No valid device token or physical push receipt is available. |
-| Connected debug APK | PASS (development artifact) | CI run [#35](https://github.com/fatoh112/taskaty/actions/runs/43119631321) succeeded from scheduler commit `538266e`, including Flutter analysis/tests, Worker typecheck/tests, dependency audit, APK build, and upload. [Artifact 13900316946](https://github.com/fatoh112/taskaty/actions/runs/43119631321/artifacts/13900316946), named `taskaty-debug-apk-35`, contains the public Firebase settings and deployed `TASKPULSE_API_URL`; expires 2026-11-14 23:31:12 UTC. **DEVELOPMENT TEST ONLY**; no public release or physical-device verification. |
+| Connected debug and release-mode APKs | PASS (development artifacts) | CI run [#43422046254](https://github.com/fatoh112/taskaty/actions/runs/43422046254) built both APKs with the validated Firebase settings and deployed `TASKPULSE_API_URL`; download [artifact 14034807951](https://github.com/fatoh112/taskaty/actions/runs/43422046254/artifacts/14034807951), expires 2026-11-16 12:11:14 UTC. Release-mode APK uses the debug signing key; physical-device verification is still unavailable. |
 | Physical Android verification | UNVERIFIED | No Android device/ADB is available locally. Native Arabic speech, real app login, notification taps, offline recovery, force-stop behavior, and successful FCM delivery have not been physically tested. |
 | Pull request | PASS | PR [#1](https://github.com/fatoh112/taskaty/pull/1) remains open and unmerged. |
 
