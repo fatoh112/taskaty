@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
 import 'api.dart';
 import 'config.dart';
+import 'notification_adapter.dart';
 import 'screens/auth_screens.dart';
 import 'screens/notification_screen.dart';
 import 'screens/settings_screen.dart';
@@ -97,26 +98,19 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   StreamSubscription<RemoteMessage>? _opened;
   StreamSubscription<RemoteMessage>? _foreground;
   StreamSubscription<String>? _tokenRefresh;
   @override void initState() {
     super.initState();
     if (AppConfig.firebaseConfigured) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _configureMessaging());
+      if (!kIsWeb) WidgetsBinding.instance.addPostFrameCallback((_) => _configureMessaging());
       _opened = FirebaseMessaging.onMessageOpenedApp.listen(_openMessage);
       _foreground = FirebaseMessaging.onMessage.listen((message) {
         ref.invalidate(notificationsProvider);
         final notification = message.notification;
         if (notification != null) {
-          _localNotifications.show(
-            id: message.data['notificationId']?.hashCode ?? message.hashCode,
-            title: notification.title ?? tr(context, 'تنبيه Taskaty', 'Taskaty alert'),
-            body: notification.body ?? tr(context, 'وصلك تحديث جديد', 'You have a new update'),
-            notificationDetails: const NotificationDetails(android: AndroidNotificationDetails('taskaty_alerts', 'تنبيهات Taskaty', channelDescription: 'تحديثات مهام الفريق ومواعيدها', importance: Importance.high, priority: Priority.high)),
-            payload: message.data['taskId'] as String?,
-          );
+          showForegroundNotification(message, notification.title ?? tr(context, 'تنبيه Taskaty', 'Taskaty alert'), notification.body ?? tr(context, 'وصلك تحديث جديد', 'You have a new update'));
         }
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message.notification?.body ?? tr(context, 'وصلك تحديث جديد', 'You have a new update'))));
       });
@@ -127,25 +121,12 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
   Future<void> _configureMessaging() async {
     try {
-      await _localNotifications.initialize(
-        settings: const InitializationSettings(android: AndroidInitializationSettings('ic_notification')),
-        onDidReceiveNotificationResponse: (response) {
-          final taskId = response.payload;
-          if (taskId != null && taskId.isNotEmpty && mounted) context.go('/task/${Uri.encodeComponent(taskId)}');
-          ref.invalidate(notificationsProvider);
-        },
-      );
-      await _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(
-        const AndroidNotificationChannel('taskaty_alerts', 'تنبيهات Taskaty', description: 'تحديثات مهام الفريق ومواعيدها', importance: Importance.high),
-      );
-      final launch = await _localNotifications.getNotificationAppLaunchDetails();
-      final launchedTaskId = launch?.didNotificationLaunchApp == true ? launch?.notificationResponse?.payload : null;
-      if (launchedTaskId != null && launchedTaskId.isNotEmpty && mounted) context.go('/task/${Uri.encodeComponent(launchedTaskId)}');
-      final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission(alert: true, badge: true, sound: true);
-      final token = await messaging.getToken();
+      final token = await configureNotifications((taskId) {
+        if (mounted) context.go('/task/${Uri.encodeComponent(taskId)}');
+        ref.invalidate(notificationsProvider);
+      });
       if (token != null) await ref.read(apiProvider).registerFcmToken(token);
-      final initial = await messaging.getInitialMessage();
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
       if (initial != null) _openMessage(initial);
     } catch (_) { /* The app remains usable when push setup or permission is unavailable. */ }
   }

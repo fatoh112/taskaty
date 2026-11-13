@@ -2,9 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
 import '../api.dart';
+import '../config.dart';
+import '../notification_adapter.dart';
 import '../app.dart';
 import '../state.dart';
 import '../theme.dart';
@@ -22,11 +24,30 @@ class SettingsScreen extends ConsumerWidget {
       const SizedBox(height: 10),
       _Diagnostics(),
       const SizedBox(height: 10),
+      if (kIsWeb) Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(tr(context, 'تنبيهات المتصفح', 'Browser notifications'), style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Text(AppConfig.webVapidKey.isEmpty
+            ? tr(context, 'مفتاح Web Push العام غير متوفر بعد. سجل التنبيهات داخل التطبيق يعمل.', 'A public Web Push key is not configured yet. In-app notification history still works.')
+            : tr(context, 'فعّل تنبيهات المتصفح لهذا الجهاز.', 'Enable browser notifications on this device.'), style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 8),
+        FilledButton(onPressed: AppConfig.webVapidKey.isEmpty ? null : () async {
+          try {
+            final token = await configureNotifications((_) {});
+            if (token == null) throw StateError('Notification permission was not granted.');
+            await ref.read(apiProvider).registerFcmToken(token);
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, 'تم تسجيل المتصفح للتنبيهات.', 'Browser notifications enabled.'))));
+          } catch (error) {
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+          }
+        }, child: Text(tr(context, 'تفعيل التنبيهات', 'Enable notifications'))),
+      ]))),
+      if (kIsWeb) const SizedBox(height: 10),
       Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(tr(context, 'حول الخصوصية', 'Privacy'), style: Theme.of(context).textTheme.titleMedium), const SizedBox(height: 8), Text(tr(context, 'الصوت يتحول لنص بخدمة التعرف على الكلام في Android؛ حسب الجهاز قد يُرسل الصوت لمزود خدمة التعرف. ما بنستخدمش خدمة ذكاء اصطناعي مدفوعة. مواعيد المهام وسجل التنبيهات محفوظة في خادم الفريق.', 'Speech is transcribed by Android’s speech recognition service; depending on device settings, audio may be sent to its provider. Task deadlines and notification history are stored by the team backend.'), style: Theme.of(context).textTheme.bodySmall)]))),
       const SizedBox(height: 12),
       OutlinedButton.icon(onPressed: () async {
         try {
-          final token = await FirebaseMessaging.instance.getToken();
+          final token = await currentNotificationToken();
           if (token != null) await ref.read(apiProvider).unregisterFcmToken(token);
         } catch (_) { /* Sign-out still works when offline or push is unavailable. */ }
         await FirebaseAuth.instance.signOut();

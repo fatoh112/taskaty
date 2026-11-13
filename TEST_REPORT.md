@@ -1,7 +1,38 @@
 # Taskaty verification report
 
-**Updated:** 2026-11-12 (Africa/Cairo)
-**Scope:** Connected development APK, Cloudflare Free CPU reduction, live Cron, D1 usage, and notification acceptance. No service was upgraded and no billing was activated.
+**Updated:** 2026-11-13 (Africa/Cairo)
+**Scope:** Connected Flutter Web acceptance, Cloudflare Free CPU reduction, live Cron, D1 usage, and notifications. No service was upgraded and no billing was activated.
+
+## Resumed Flutter Web acceptance (2026-11-13)
+
+Tests used two existing, real Firebase email/password accounts on the registered Web app and the deployed Worker. Their temporary QA team records were queried from the production D1 database read-only before cleanup. The owner’s personal Firebase account was not used.
+
+| Check | Status | Evidence |
+|---|---|---|
+| Firebase email verification and fresh login | PASS | The earlier real Gmail verification flow succeeded. The assignee account was signed out from Flutter Web, used a real Firebase password-reset email, and signed in again successfully. Its authenticated Worker `/v1/teams` request returned 200 after login. |
+| Team creation and invitation join | PASS | The two existing authenticated accounts created a QA team and joined it with a one-use invitation through the app. The team and memberships were stored in D1. |
+| Create, assign, start, and complete | PASS | The creator submitted a four-hour task through Flutter Web to the second account. The assignee opened its details, started and completed it. A browser refresh restored `completed` status. Activity history displayed created, started, and completed entries with server timestamps. |
+| Assignment and completion notification history | PASS | The assignee saw the assignment entry and later the completion entry in Flutter Web. After a page refresh, the notification screen still listed both, alongside team creation/join entries. Authenticated Worker `GET /v1/notifications` returned the same records. A read-only Cloudflare D1 query found the completed task row and assignment/completion notification rows for the correct team member. |
+| Cross-team task and notification isolation | PASS | A real authenticated account that was not a member of a separate QA team received `404 TEAM_NOT_FOUND` for that team's task list and a task detail request. Its notification feed contained no record from that team, and trying to mark that team's notification read returned `404 NOTIFICATION_NOT_FOUND`. The owner account could read the isolated team task. |
+| Verified-token regression | PASS | Following fresh login, the verified account's authenticated team-list requests returned 200. A malformed/expired bearer token returned one `401 INVALID_TOKEN`. The Flutter retry branch is bounded to a single forced token refresh and only the `EMAIL_NOT_VERIFIED` response for an already verified local Firebase user. |
+| Browser CORS | PASS | `OPTIONS` from `http://127.0.0.1:5173` returned 204 with the exact allowed origin; authenticated `GET /v1/teams` returned 200 with that origin. An unrelated origin's preflight returned 403 without `Access-Control-Allow-Origin`. |
+| API/scheduler health | PASS | Production `/health` returned 200/`ok`, a recent scheduler finish (28 seconds before the check), and no scheduler error. |
+| Browser console/network | PASS | On the latest authenticated page refresh, Playwright recorded no page exceptions, console errors, failed requests, or local-origin HTTP errors. |
+| D1 persistence | PASS | Task status and completion time plus its notification rows were read from `taskaty-db` after browser reload. No local mock backend was involved. |
+| Browser push | UNVERIFIED | The public VAPID key is absent (`TASKATY_WEB_VAPID_KEY` unset); Settings correctly disables browser registration. No Web FCM token or actual browser push was demonstrated. Persistent in-app notification history works. |
+
+### Automated regression results
+
+| Check | Status | Result |
+|---|---|---|
+| Flutter analysis | PASS | `flutter analyze --no-fatal-infos` exited 0. It reported 48 informational lints/deprecations; no warnings or errors. Plain `flutter analyze` exits 1 because the SDK treats those info-level findings as fatal by default. |
+| Flutter tests | PASS | `flutter test`: 13 tests passed, including Arabic parser, task form validation, and RTL widget rendering. |
+| Flutter Web build | PASS | `flutter build web --release --dart-define-from-file=../../.taskaty-local/web-defines.json` built `apps/android/build/web`. Wasm dry run succeeded; no APK was built. |
+| Local Web launcher configuration | PASS | `scripts/run-web.ps1 -ConfigureOnly` exited 0 and generated only the ignored local public-config file and Firebase messaging service worker. |
+| Worker typecheck | PASS | `npm run typecheck` exited 0. |
+| Worker tests | PASS | `npm test`: 5 files, 20 tests passed, including exact-origin preflight, rejected foreign origins, and CORS on authenticated API errors. |
+
+The two disposable QA Firebase accounts were deleted after real password reauthentication. Their two exact QA teams were removed from D1; cascading cleanup removed invitations, tasks, activity, and notifications. QA-specific API rate-limit buckets and local app/Firebase action-site data in both disposable browser profiles were also cleared. A read-only follow-up query returned zero QA team, user, task, notification, activity, invitation, device-token, and rate-limit rows. The owner's personal Firebase account and unrelated production data were not changed.
 
 ## Deployment and account state
 
@@ -12,8 +43,8 @@
 | D1 database and migration | PASS | Dedicated `taskaty-db` (`6ef4b4e0-915d-493f-8a4e-2d320aca296c`) contains the checked-in migration. No unrelated database was changed. |
 | Worker version and Cron | DEPLOYED | `taskpulse-api` is live at [https://taskpulse-api.sultan-food-internal.workers.dev](https://taskpulse-api.sultan-food-internal.workers.dev), current version `909da5a0-0b2c-4c21-91a3-2d89ac759f8a`, D1 binding retained, and Cron remains `* * * * *`. `cf workers versions get` confirmed both FCM secret bindings and the Firebase project variable remain configured. |
 | Production health | PASS | `/health` returned 200 with `status: ok`, recent scheduler start/finish timestamps, and no scheduler error. |
-| Existing live account/API smoke | PASS (previous run) | Two temporary Firebase email/password accounts registered and signed in; after satisfying the Worker email-verification gate, they created/joined a team, viewed an assigned task, and persisted completion. Temporary users and data were removed. This did not verify the user-facing email link flow. |
-| Assignment notification history | PASS (previous run) | The assigned task appeared for both authenticated team users and the assignment notification was returned through authenticated history and found in D1. |
+| Existing live account/API smoke | PASS (previous scheduler run) | Two temporary Firebase email/password accounts exercised team/task APIs. The resumed browser acceptance above additionally verified the user-facing email-verification and password-reset flows. |
+| Assignment notification history | PASS (live Web and D1) | Assignment and completion notifications appeared in the assignee's browser history after refresh and matched read-only D1 rows. |
 | FCM server authentication | PASS (previous run); delivery UNVERIFIED | Worker credentials are secrets only. An intentionally invalid token reached FCM HTTP v1 and returned HTTP 400, confirming OAuth/server connectivity but not delivery. No valid device token or physical push receipt is available. |
 | Connected debug APK | PASS (development artifact) | CI run [#35](https://github.com/fatoh112/taskaty/actions/runs/43119631321) succeeded from scheduler commit `538266e`, including Flutter analysis/tests, Worker typecheck/tests, dependency audit, APK build, and upload. [Artifact 13900316946](https://github.com/fatoh112/taskaty/actions/runs/43119631321/artifacts/13900316946), named `taskaty-debug-apk-35`, contains the public Firebase settings and deployed `TASKPULSE_API_URL`; expires 2026-11-14 23:31:12 UTC. **DEVELOPMENT TEST ONLY**; no public release or physical-device verification. |
 | Physical Android verification | UNVERIFIED | No Android device/ADB is available locally. Native Arabic speech, real app login, notification taps, offline recovery, force-stop behavior, and successful FCM delivery have not been physically tested. |
@@ -74,7 +105,7 @@ Local SQL.js/FCM-mocked tests are not Cloudflare CPU measurements or physical pu
 
 | Requirement | Status | Limit |
 |---|---|---|
-| Team isolation | PASS (local); UNVERIFIED live outsider test | Local authorization tests pass; no new live outsider account was used in this scheduler milestone. |
+| Team isolation | PASS (live and local) | A verified real account outside the isolated team's membership received `TEAM_NOT_FOUND` for task list/detail and could not mark that team's notification read. |
 | Completion before deadline | PASS (local and previous live completion) | Production task completion persisted previously; this scheduler change is covered by the exact-deadline race test. |
 | Overdue detection while app is closed | PASS (controlled live Cron) | Two test tasks became overdue without an Android app running; Cron detected and persisted their team-wide records. |
 | Persistent overdue notification history | PASS (controlled live D1) | Four overdue notification records persisted for the two authorized test-team members; duplicate counts remained unchanged over later Cron ticks. |

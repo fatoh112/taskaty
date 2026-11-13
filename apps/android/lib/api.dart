@@ -33,7 +33,7 @@ class TaskApi {
     }
   }
 
-  Future<Map<String, dynamic>> _request(String path, {String method = 'GET', Object? body, Map<String, String>? headers, bool allowNotModified = false}) async {
+  Future<Map<String, dynamic>> _request(String path, {String method = 'GET', Object? body, Map<String, String>? headers, bool allowNotModified = false, bool retriedVerifiedToken = false}) async {
     if (!AppConfig.apiConfigured) throw const ApiException('Backend is not configured. Add TASKPULSE_API_URL.', code: 'CONFIG_MISSING');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw const ApiException('Sign in to continue.', code: 'AUTH_REQUIRED');
@@ -51,6 +51,10 @@ class TaskApi {
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = payload['error'] as Map<String, dynamic>?;
+      if (response.statusCode == 403 && error?['code'] == 'EMAIL_NOT_VERIFIED' && user.emailVerified && !retriedVerifiedToken) {
+        await user.getIdToken(true);
+        return _request(path, method: method, body: body, headers: headers, allowNotModified: allowNotModified, retriedVerifiedToken: true);
+      }
       throw ApiException((error?['message'] as String?) ?? 'Request failed (${response.statusCode}).', code: (error?['code'] as String?) ?? 'HTTP_${response.statusCode}');
     }
     final etag = response.headers['etag'];

@@ -21,6 +21,12 @@ The CLI registered Android package `com.taskpulse.app` as app ID `1:476661033523
 
 The public Android app values were retrieved with `firebase apps:sdkconfig`. The repository Actions variables `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, `TASKPULSE_FIREBASE_SENDER_ID`, and `TASKPULSE_API_URL` are set. No `google-services.json` is needed: the Flutter app initializes `FirebaseOptions` from these Dart defines. CI run #33 built a connected debug APK using the deployed Worker URL above.
 
+### Flutter Web local development
+
+The registered Firebase Web app is app ID `1:476661033523:web:e42d31fd56ccfb69351146`, project `taskaty-d3042`, with `authDomain=taskaty-d3042.firebaseapp.com`. Authentication's authorized domains include `127.0.0.1`. The deployed Worker allows browser CORS only from `http://127.0.0.1:5173`; preflight and authenticated responses include that exact origin, while an unrelated origin is rejected.
+
+From the repository root, run `scripts/run-web.ps1` for Flutter Debug Chrome, or `scripts/run-web.ps1 -Release` for the Release fallback. The script uses `.taskaty-local/web-defines.json` and generates `apps/android/web/firebase-messaging-sw.js` from the existing public Web SDK configuration. These local files are ignored by Git. `TASKATY_WEB_VAPID_KEY` is optional and public, but is currently unset. Browser push registration stays disabled until a valid project VAPID public key is configured; the D1-backed in-app notification center remains available. Never put FCM service-account credentials in Flutter or the generated service worker.
+
 Firebase lists Authentication (most options) and Cloud Messaging as no-cost products on Spark; FCM itself has no charge. The FCM HTTP v1 API is enabled. A narrowly scoped sender service account and token-encryption key are stored as Cloudflare Worker Secrets. A live invalid-token smoke request reached FCM and returned HTTP 400, which verifies the server auth path but not delivery. Never put the private key in this repository, GitHub Actions, APK, or chat. If FCM rejects a valid device token, investigate Spark/project permissions without enabling billing.
 
 ## 2. Local Worker development

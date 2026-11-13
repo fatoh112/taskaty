@@ -17,6 +17,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+.taskaty-local/
+apps/android/web/firebase-messaging-sw.js
 .wrangler/
 .dev.vars
 backend/worker/.env

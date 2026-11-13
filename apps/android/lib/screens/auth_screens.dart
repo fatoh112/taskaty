@@ -115,7 +115,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 class VerifyEmailScreen extends StatefulWidget { const VerifyEmailScreen({super.key}); @override State<VerifyEmailScreen> createState() => _VerifyEmailScreenState(); }
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   bool _busy = false; String? _notice;
-  Future<void> _check() async { setState(() => _busy = true); await FirebaseAuth.instance.currentUser?.reload(); if (mounted) { setState(() { _busy = false; _notice = FirebaseAuth.instance.currentUser?.emailVerified == true ? tr(context, 'تم التحقق، جاري فتح التطبيق.', 'Verified. Opening Taskaty.') : tr(context, 'لسه ماوصلناش تأكيد البريد.', 'Email verification is not confirmed yet.'); }); if (FirebaseAuth.instance.currentUser?.emailVerified == true) context.go('/home'); } }
+  Future<void> _check() async {
+    setState(() => _busy = true);
+    try {
+      await FirebaseAuth.instance.currentUser?.reload();
+      final user = FirebaseAuth.instance.currentUser;
+      final verified = user?.emailVerified == true;
+      if (verified) await user!.getIdToken(true);
+      if (!mounted) return;
+      setState(() => _notice = verified
+          ? tr(context, 'تم التحقق، جاري فتح التطبيق.', 'Verified. Opening Taskaty.')
+          : tr(context, 'لسه ماوصلناش تأكيد البريد.', 'Email verification is not confirmed yet.'));
+      if (verified) context.go('/home');
+    } catch (_) {
+      if (mounted) setState(() => _notice = tr(context, 'تعذر تحديث حالة الحساب. حاول مرة تانية.', 'Could not refresh account status. Try again.'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
   Future<void> _resend() async { try { await FirebaseAuth.instance.currentUser?.sendEmailVerification(); setState(() => _notice = tr(context, 'بعتنا رابط تحقق جديد.', 'A new verification link has been sent.')); } catch (_) { setState(() => _notice = tr(context, 'تعذر إرسال الرابط دلوقتي.', 'Could not resend the link right now.')); } }
   @override Widget build(BuildContext context) => _AuthPage(title: tr(context, 'أكد بريدك الإلكتروني', 'Verify your email'), subtitle: tr(context, 'افتح رسالة التحقق قبل استخدام مهام الفريق.', 'Open the verification email before using team tasks.'), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     const Icon(Icons.mark_email_read_outlined, size: 50, color: TaskatyColors.cyan),

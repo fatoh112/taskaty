@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => ({
           : {}),
       }),
       ...(projectId ? { FIREBASE_PROJECT_ID: bindings.text(projectId) } : {}),
+      APP_ORIGIN: bindings.text("http://127.0.0.1:5173"),
     },
     triggers: [triggers.scheduled({ schedule: "* * * * *" })],
   },
