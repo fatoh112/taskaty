@@ -16,9 +16,26 @@
 
 The full Flutter test suite passed **23 tests** across 144 responsive combinations. `flutter analyze --no-fatal-infos` exited 0 with **91 info-level lints/deprecation notices and no warnings or errors**. `flutter pub get` passed. `flutter build web --release` passed in 102.4 seconds as a compatibility build; it was not a connected browser acceptance run. Worker typecheck passed and its five test files reported 20 passing tests. No backend source or production data changed.
 
-The only locally visible Flutter devices were Windows, Chrome, and Edge. Native Android install, logcat review, system-bar/keyboard behavior on an actual device, microphone recognition, and physical screenshots are **UNVERIFIED**. Android APK build and signature checks are pending the next GitHub Actions run after this UI change is pushed.
+The only locally visible Flutter devices were Windows, Chrome, and Edge. Native Android install, logcat review, system-bar/keyboard behavior on an actual device, microphone recognition, and physical screenshots remain **UNVERIFIED**. The latest GitHub Actions run has now built and validated both APK variants; see the current delivery section below.
 
-## Native Android APK delivery (2026-11-13)
+## Current Android APK delivery (2026-11-13)
+
+**Status: PASS in GitHub Actions.** Run [#43472145182](https://github.com/fatoh112/taskaty/actions/runs/43472145182) completed successfully for PR head `929c0f5dd70c265c1300f9172b90fdc5a00cd524`. For the `pull_request` event, GitHub built merge commit `06d9c8a6050e0567b429d6240545895c6d238aa9`; its parents include the PR head and current base, so the APK contains this branch's changes.
+
+The uploaded artifact is [taskaty-android-full-apk-44](https://github.com/fatoh112/taskaty/actions/runs/43472145182/artifacts/14061628689), expiring **2026-11-16 17:30:10 UTC**. Its ZIP is 117,337,168 bytes with SHA-256 `5fd3357628e03e84b1c6c5aa5242e4859453019bd8cd9fc55c960e127f299f6d`. The downloaded archive's hash matched GitHub's artifact digest. Individual APK hashes were independently recomputed after extraction and match the included `SHA256SUMS.txt`.
+
+| APK | Size | SHA-256 |
+|---|---:|---|
+| `taskaty-android-debug.apk` | 167,692,009 bytes | `10ba21351bf59019426383096998fe8e388c78c4b34793be4f30ea535640e236` |
+| `taskaty-android-release-debug-signed.apk` | 61,495,705 bytes | `c080f890c79afefbabcc1d6cbe07527a2fb9b69716afd5b70307ec76d51fe56` |
+
+CI verified APK Signature Scheme v2, package `com.taskpulse.app`, version `1.0.0+1`, and minimum Android SDK 24 (Android 7.0). The production Firebase project and Worker URL variables passed the workflow's configuration checks. The release-mode APK uses the generated debug signing key and is not suitable as a production-signed release.
+
+The same CI run passed Flutter analysis (`--no-fatal-infos`; 68 info-level diagnostics), all 23 Flutter tests, Worker typecheck, all 20 Worker tests across five files, `npm audit --audit-level=high`, both APK builds, metadata/signature checks, and artifact upload. Build logs include nonfatal upcoming Flutter compatibility warnings for Gradle 8.14.6, Android Gradle Plugin 8.11.1, and Kotlin 2.2.20, plus a caught duplicate-path watcher message during release build and a Firebase Auth Kotlin metadata-version notice. Both APK builds and the overall run completed successfully.
+
+No emulator or physical Android device is available here. Installation, native runtime behavior, logcat, Android Arabic speech recognition, and physical FCM delivery remain **UNVERIFIED**; passing widget tests and APK validation are not device acceptance evidence.
+
+## Earlier Native Android APK delivery (2026-11-13; superseded by run #44)
 
 The APKs were built by GitHub Actions run [#43425005303](https://github.com/fatoh112/taskaty/actions/runs/43425005303) from PR head `71f24b4eb09fb6c1c301c006dfde7dee4a81e19c`. The run completed successfully, validated the APK signatures and compiled manifest metadata, then uploaded artifact `taskaty-android-full-apk-42`. Download it from [the GitHub Actions artifact](https://github.com/fatoh112/taskaty/actions/runs/43425005303/artifacts/14037491075); it expires at **2026-11-16 12:33:21 UTC**. The ZIP is 117,228,695 bytes.
 
@@ -64,7 +81,7 @@ Tests used two existing, real Firebase email/password accounts on the registered
 | Worker typecheck | PASS | `npm run typecheck` exited 0. |
 | Worker tests | PASS | `npm test`: 5 files, 20 tests passed, including exact-origin preflight, rejected foreign origins, and CORS on authenticated API errors. |
 | Automatic Android CI for this push | CANCELLED before APK | GitHub queued [run #43415666260](https://github.com/fatoh112/taskaty/actions/runs/43415666260); it was cancelled during Flutter setup under the Web-only no-APK instruction. The APK build and upload steps were skipped. The local checks above were run directly and passed. |
-| Current native Android APK CI | PASS | [Run #43425005303](https://github.com/fatoh112/taskaty/actions/runs/43425005303) built and validated universal debug and release-mode APKs from PR head `71f24b4`; see the Android delivery section above. |
+| Current native Android APK CI | PASS | [Run #43472145182](https://github.com/fatoh112/taskaty/actions/runs/43472145182) built and validated universal debug and release-mode APKs from PR head `929c0f5`; see the current Android delivery section above. |
 
 The two disposable QA Firebase accounts were deleted after real password reauthentication. Their two exact QA teams were removed from D1; cascading cleanup removed invitations, tasks, activity, and notifications. QA-specific API rate-limit buckets and local app/Firebase action-site data in both disposable browser profiles were also cleared. A read-only follow-up query returned zero QA team, user, task, notification, activity, invitation, device-token, and rate-limit rows. The owner's personal Firebase account and unrelated production data were not changed.
 
@@ -80,7 +97,7 @@ The two disposable QA Firebase accounts were deleted after real password reauthe
 | Existing live account/API smoke | PASS (previous scheduler run) | Two temporary Firebase email/password accounts exercised team/task APIs. The resumed browser acceptance above additionally verified the user-facing email-verification and password-reset flows. |
 | Assignment notification history | PASS (live Web and D1) | Assignment and completion notifications appeared in the assignee's browser history after refresh and matched read-only D1 rows. |
 | FCM server authentication | PASS (previous run); delivery UNVERIFIED | Worker credentials are secrets only. An intentionally invalid token reached FCM HTTP v1 and returned HTTP 400, confirming OAuth/server connectivity but not delivery. No valid device token or physical push receipt is available. |
-| Connected debug and release-mode APKs | PASS (development artifacts) | CI run [#43425005303](https://github.com/fatoh112/taskaty/actions/runs/43425005303) built both APKs with the validated Firebase settings and deployed `TASKPULSE_API_URL`; download [artifact 14037491075](https://github.com/fatoh112/taskaty/actions/runs/43425005303/artifacts/14037491075), expires 2026-11-16 12:33:21 UTC. Release-mode APK uses the debug signing key; physical-device verification is still unavailable. |
+| Connected debug and release-mode APKs | PASS (development artifacts) | CI run [#43472145182](https://github.com/fatoh112/taskaty/actions/runs/43472145182) built both APKs with the validated Firebase settings and deployed `TASKPULSE_API_URL`; download [artifact 14061628689](https://github.com/fatoh112/taskaty/actions/runs/43472145182/artifacts/14061628689), expires 2026-11-16 17:30:10 UTC. Release-mode APK uses the debug signing key; physical-device verification is still unavailable. |
 | Physical Android verification | UNVERIFIED | No Android device/ADB is available locally. Native Arabic speech, real app login, notification taps, offline recovery, force-stop behavior, and successful FCM delivery have not been physically tested. |
 | Pull request | PASS | PR [#1](https://github.com/fatoh112/taskaty/pull/1) remains open and unmerged. |
 
