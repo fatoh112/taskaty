@@ -39,10 +39,16 @@ npm test
 npm run typecheck
 ```
 
+## Android CI artifact
+
+The public GitHub Actions workflow uses a standard `ubuntu-24.04` runner, runs Flutter analysis/tests and Worker checks, builds a debug APK, and retains the artifact for 3 days. Repository Actions variables contain the public Firebase app settings and deployed Worker URL. These values are compiled into the APK by design; never put a service-account private key or other backend credential in them.
+
+Connected development APK, **DEVELOPMENT TEST ONLY**: CI run [#35](https://github.com/fatoh112/taskaty/actions/runs/43119631321), [download artifact 13900316946](https://github.com/fatoh112/taskaty/actions/runs/43119631321/artifacts/13900316946), named `taskaty-debug-apk-35`, expires 2026-11-14 23:31:12 UTC. It contains the deployed API URL and Firebase app configuration and was built from scheduler commit `538266e`. The APK is not a public release or production verification. See [TEST_REPORT.md](TEST_REPORT.md) for current measurements and device-test status.
+
 ## Security model
 
 The app sends a Firebase ID token in `Authorization: Bearer …` for every API operation. The Worker validates the RS256 signature and Firebase claims, derives the UID from the verified token, and checks team membership from D1 before reading or changing team data. Task deadlines use Worker server time. Notification history is stored per recipient in D1; FCM is a best-effort delivery channel.
 
 ## Current state
 
-The repository now contains the Flutter client, Worker API, D1 schema and migrations, Cron/outbox implementation, and automated tests. Worker typechecking, 12 SQL.js API/scheduler tests, Cloudflare `cf build`, and a local `cf dev` D1/Cron smoke check pass. Flutter tests/APK have not been built because Flutter and Android SDK tools are missing. The Firebase project and Cloudflare account are not configured in this checkout, so deployment and physical FCM verification are unverified. See [TEST_REPORT.md](TEST_REPORT.md) for exact boundaries and [docs/](docs/) for design, privacy and operations.
+The repository contains the Flutter client, Worker API, D1 migrations, Cron/outbox implementation, and automated tests. Worker typechecking and all 17 SQL.js API/scheduler tests pass locally and in CI. The account owner confirmed Firebase project `taskaty-d3042` is on Spark and Cloudflare account `f4c2197713164b02bd5fc0ba861da81d` is on Workers Free. Dedicated D1 `taskaty-db` is migrated; Worker `taskpulse-api` is live at [https://taskpulse-api.sultan-food-internal.workers.dev](https://taskpulse-api.sultan-food-internal.workers.dev) with the one-minute Cron trigger. Live `/health`, authenticated registration/login, team membership, task assignment/completion, and assignment notification persistence were exercised. FCM credentials remain Worker Secrets; an invalid-token request reached FCM HTTP v1, but physical delivery is unverified. Cloudflare analytics identified 21 over-budget Cron invocations among 189 baseline samples. Worker version #7 (`909da5a0-0b2c-4c21-91a3-2d89ac759f8a`) passed a 20-tick idle sample (max 8.440 ms), a controlled two-task overdue/fanout tick (7.253 ms), and a reminder tick (5.482 ms). CI run #35 passed on scheduler commit `538266e`; the connected development APK is available above. See [TEST_REPORT.md](TEST_REPORT.md) and [FREE_TIER_AUDIT.md](FREE_TIER_AUDIT.md) for evidence and remaining gates.

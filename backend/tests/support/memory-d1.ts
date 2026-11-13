@@ -48,19 +48,30 @@ class Statement implements D1PreparedStatement {
 }
 
 class MemoryD1 implements D1Database {
+  private batchTail: Promise<void> = Promise.resolve();
+
   constructor(private readonly db: SqlJsDatabase) {}
   prepare(query: string): D1PreparedStatement { return new Statement(this.db, query); }
 
   async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
-    this.db.run("BEGIN IMMEDIATE");
+    const previous = this.batchTail;
+    let release!: () => void;
+    this.batchTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    let transactionStarted = false;
     try {
+      this.db.run("BEGIN IMMEDIATE");
+      transactionStarted = true;
       const results: D1Result<T>[] = [];
       for (const statement of statements) results.push(await statement.all<T>());
       this.db.run("COMMIT");
+      transactionStarted = false;
       return results;
     } catch (error) {
-      this.db.run("ROLLBACK");
+      if (transactionStarted) this.db.run("ROLLBACK");
       throw error;
+    } finally {
+      release();
     }
   }
 

@@ -2,17 +2,14 @@ import { authenticateRequest } from "./auth.ts";
 import { createInvitation, createTeam, joinTeam, leaveTeam, listMembers, listTeams } from "./teams.ts";
 import { createTask, getDashboard, getTask, getTaskActivity, listTasks, updateTask } from "./tasks.ts";
 import { listNotifications, markNotificationRead, registerDevice, unregisterDevice } from "./notifications.ts";
-import { ApiError, errorResponse, jsonResponse, readJson, nowIso, sha256Hex } from "./http.ts";
+import { ApiError, corsHeaders, errorResponse, jsonResponse, preflightResponse, readJson, nowIso, sha256Hex } from "./http.ts";
 import { rateLimit, syncUser } from "./data.ts";
 import { runScheduledWork } from "./scheduler.ts";
 import type { Env, ExecutionContext, ScheduledController } from "./types.ts";
 
 function notModified(request: Request, env: Env, etag: string): Response {
   const headers = new Headers({
-    "Access-Control-Allow-Origin": env.APP_ORIGIN && request.headers.get("origin") === env.APP_ORIGIN ? env.APP_ORIGIN : env.APP_ORIGIN ? "null" : "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,Idempotency-Key,If-None-Match",
-    "Access-Control-Max-Age": "600",
+    ...corsHeaders(request, env),
     "Cache-Control": "no-store",
     ETag: etag,
     Vary: "Origin",
@@ -134,13 +131,7 @@ const worker = {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: {
-        "Access-Control-Allow-Origin": env.APP_ORIGIN && request.headers.get("origin") === env.APP_ORIGIN ? env.APP_ORIGIN : env.APP_ORIGIN ? "null" : "*",
-        "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Authorization,Content-Type,Idempotency-Key,If-None-Match",
-        "Access-Control-Max-Age": "600",
-        Vary: "Origin",
-      } });
+      return preflightResponse(request, env);
     }
     try {
       if (url.pathname === "/health" && request.method === "GET") return await health(request, env);

@@ -42,7 +42,9 @@ void main() {
       expect(parsed.title, 'تراجع الملفات');
       final spelled = TaskParser.parse('ياسين يخلص التقرير بكرة الساعة خمسة', members, now: now);
       expect(spelled.dueAt, DateTime(2026, 11, 12, 5));
-      expect(spelled.title, 'يخلص التقرير');
+      expect(spelled.assignedTo, isNull);
+      expect(spelled.assignmentNeedsReview, isFalse);
+      expect(spelled.title, 'ياسين يخلص التقرير');
     });
 
     test('detects spoken task completion and start updates for explicit review', () {

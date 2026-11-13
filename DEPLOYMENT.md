@@ -2,14 +2,32 @@
 
 This repository is configured for permanent no-cost plans only. Do not attach Cloud Billing, enable Firebase Blaze, or upgrade Cloudflare Workers to Paid. If a quota or account policy blocks setup, leave that integration disabled and report the limit.
 
+## Public GitHub Actions Android build
+
+`.github/workflows/android-build.yml` runs on manual dispatch, relevant pushes to `main`, and pull requests to `main`. It uses the standard `ubuntu-24.04` hosted runner, Java 17, Android SDK API 36, and Flutter stable 3.47.0. GitHub documents standard hosted runners as free on public repositories; this workflow does not use larger runners or a paid build service. The debug APK artifact is retained for 3 days.
+
+The workflow always supports a build without a backend URL. Firebase options are already set as repository **Actions variables** (Settings → Secrets and variables → Actions → Variables):
+
+- `TASKPULSE_API_URL`: deployed HTTPS `workers.dev` API base URL.
+- `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, `TASKPULSE_FIREBASE_SENDER_ID`: public settings for the registered Android Firebase app with package `com.taskpulse.app`.
+
+These public app settings are compiled into the APK by design. `TASKPULSE_API_URL` is set to `https://taskpulse-api.sultan-food-internal.workers.dev`. Connected development APK, **DEVELOPMENT TEST ONLY**: CI run [#33](https://github.com/fatoh112/taskaty/actions/runs/43108158419), [artifact 13895247109](https://github.com/fatoh112/taskaty/actions/runs/43108158419/artifacts/13895247109), expires 2026-11-14 22:07:57 UTC. Do not add an FCM service-account JSON/private key, Cloudflare API token, or other server credential to Actions variables or the Android build. Those credentials belong only in Cloudflare Worker Secrets. Artifact access follows GitHub sign-in and repository access rules.
+
 ## 1. Firebase Spark
 
-1. Create/select a Firebase project that remains on Spark, with no Cloud Billing account linked.
-2. Register Android package `com.taskpulse.app`.
-3. Enable Firebase Authentication email/password. Configure verification and password reset templates.
-4. Enable Firebase Cloud Messaging. Android push requires a device/emulator with Google Play services and notification permission.
-5. In Firebase Project settings, copy the public app values: Web API key, Android App ID, Project ID and sender ID. The Flutter client initializes Firebase from Dart defines; `google-services.json` is not required by this project.
-6. For server push, use the project's service account only if the account lets you create/use it on Spark. Grant only the FCM send permission. Never copy its private key into this repository, APK, or chat. If key creation is blocked by policy, report that blocker and keep push sending unconfigured; do not change plans.
+The existing project is `taskaty-d3042` (`taskaty`). The account owner confirmed that it is on Firebase Spark (no-cost). No billing was enabled and no plan was changed. Do not link Cloud Billing or upgrade to Identity Platform.
+
+The CLI registered Android package `com.taskpulse.app` as app ID `1:476661033523:android:69e319439b3b5b6a351146`. `firebase.json` contains the Email/Password provider configuration and `.firebaserc` selects this project. `firebase deploy --only auth --project taskaty-d3042` completed and reported `Auth providers enabled: email/password`. The CLI created a `Default Web App` while provisioning Auth; no duplicate Android app was created. Firebase Auth verification and password-reset emails are implemented in Flutter. Their device flow has not yet been physically tested.
+
+The public Android app values were retrieved with `firebase apps:sdkconfig`. The repository Actions variables `TASKPULSE_FIREBASE_API_KEY`, `TASKPULSE_FIREBASE_APP_ID`, `TASKPULSE_FIREBASE_PROJECT_ID`, `TASKPULSE_FIREBASE_SENDER_ID`, and `TASKPULSE_API_URL` are set. No `google-services.json` is needed: the Flutter app initializes `FirebaseOptions` from these Dart defines. CI run #33 built a connected debug APK using the deployed Worker URL above.
+
+### Flutter Web local development
+
+The registered Firebase Web app is app ID `1:476661033523:web:e42d31fd56ccfb69351146`, project `taskaty-d3042`, with `authDomain=taskaty-d3042.firebaseapp.com`. Authentication's authorized domains include `127.0.0.1`. The deployed Worker allows browser CORS only from `http://127.0.0.1:5173`; preflight and authenticated responses include that exact origin, while an unrelated origin is rejected.
+
+From the repository root, run `scripts/run-web.ps1` for Flutter Debug Chrome, or `scripts/run-web.ps1 -Release` for the Release fallback. The script uses `.taskaty-local/web-defines.json` and generates `apps/android/web/firebase-messaging-sw.js` from the existing public Web SDK configuration. These local files are ignored by Git. `TASKATY_WEB_VAPID_KEY` is optional and public, but is currently unset. Browser push registration stays disabled until a valid project VAPID public key is configured; the D1-backed in-app notification center remains available. Never put FCM service-account credentials in Flutter or the generated service worker.
+
+Firebase lists Authentication (most options) and Cloud Messaging as no-cost products on Spark; FCM itself has no charge. The FCM HTTP v1 API is enabled. A narrowly scoped sender service account and token-encryption key are stored as Cloudflare Worker Secrets. A live invalid-token smoke request reached FCM and returned HTTP 400, which verifies the server auth path but not delivery. Never put the private key in this repository, GitHub Actions, APK, or chat. If FCM rejects a valid device token, investigate Spark/project permissions without enabling billing.
 
 ## 2. Local Worker development
 
@@ -33,35 +51,9 @@ The local migration script uses the fixed development-only D1 UUID `00000000-000
 
 ## 3. Cloudflare Free deployment
 
-First authenticate with the project owner's Cloudflare account and confirm the dashboard still shows the Free plan. These are account-owner interactive actions; do not provide credentials in chat.
+The account owner confirmed Cloudflare account `f4c2197713164b02bd5fc0ba861da81d` is on Workers Free ($0). `npx cf auth whoami` verified the authenticated account and valid token. The dedicated D1 database `taskaty-db` (ID `6ef4b4e0-915d-493f-8a4e-2d320aca296c`) was created, and the checked-in initial migration was applied remotely. Worker `taskpulse-api` is deployed at `https://taskpulse-api.sultan-food-internal.workers.dev` with that D1 binding and the `* * * * *` Cron. Current version `909da5a0-0b2c-4c21-91a3-2d89ac759f8a` retains the D1 binding, Firebase project variable, and both FCM Worker Secret bindings; `/health` returned 200 with a fresh scheduler heartbeat.
 
-```powershell
-cd backend/worker
-npx cf auth login
-npx cf auth whoami
-npx cf deploy --dry-run
-```
-
-Create a D1 database named `taskpulse-db` on that same Free account. Use the documented CLI discovery flow (`npx cf cli search "create a D1 database"`, then inspect the result with `npx cf schema ...`) to confirm the exact current command/options. Save its database ID as the process environment variable `TASKPULSE_D1_ID` for subsequent `cf` commands; the config binds it as `DB`. Never set or use an upgrade plan.
-
-Before the first deployment, apply the checked-in schema to the remote database:
-
-```powershell
-npx cf d1 migrations apply <D1_DATABASE_ID> --dir ../migrations
-```
-
-Set `FIREBASE_PROJECT_ID` in the PowerShell process environment for `cloudflare.config.ts` to expose it as a non-secret text binding. Set these two private values as Worker Secrets with the current `cf` secret command (discover and inspect it using `npx cf cli search "set a Worker secret"` and `npx cf schema ...`):
-
-- `FCM_SERVICE_ACCOUNT_JSON`: the service account JSON authorized for FCM HTTP v1.
-- `FCM_TOKEN_ENCRYPTION_KEY`: base64 encoding of 32 cryptographically random bytes, used to encrypt device tokens at rest.
-
-Keep secret values out of shell history, source, logs, and Git. Then deploy:
-
-```powershell
-npx cf deploy
-```
-
-The config provisions one D1 binding, `workers.dev`, and the `* * * * *` Cron trigger. Confirm the account remains Free, apply the migration before users access the API, then record the deployed `https://<worker>.<account>.workers.dev` URL. Cloudflare's current [CLI deployment guide](https://developers.cloudflare.com/cf/projects/) describes auth, dry runs and deploy behavior. Cron has only 10 ms CPU per Free invocation, so real account emulation/metrics must establish whether FCM signing and current bounded processing fit before production use.
+The previous Worker version produced 189 Cron invocation samples with CPU p50 6.122 ms, p95 11.168 ms, p99 15.167 ms and maximum 16.322 ms; 21 samples exceeded 10 ms. Version #6's 20 idle ticks measured p50 4.590 ms, p95 7.237 ms, maximum 7.562 ms, and zero over-budget runs. A controlled two-task overdue/fanout tick then measured 17.606 ms on #6. Version #7 batches fanout member-page reads/writes and handles no-device or missing-notification outbox rows in the same D1 batch as delivery selection. On #7, the same controlled overdue/fanout workload measured 7.253 ms, a reminder tick measured 5.482 ms, and 20 idle ticks measured p50 4.191 ms, p95 7.659 ms, p99 8.284 ms and maximum 8.440 ms, with no failures or 10 ms overruns. These production checks used no registered device; valid-token FCM delivery CPU remains unmeasured. No plan upgrade is permitted. Cloudflare's [`cf` project documentation](https://developers.cloudflare.com/cf/projects/) covers the existing CLI workflow. Secret names are `FCM_SERVICE_ACCOUNT_JSON` and `FCM_TOKEN_ENCRYPTION_KEY`; values stay in Worker Secrets.
 
 ## 4. Android configuration and APK
 

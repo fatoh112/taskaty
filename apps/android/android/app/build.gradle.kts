@@ -6,11 +6,12 @@ plugins {
 
 android {
     namespace = "com.taskpulse.app"
+    ndkVersion = "28.2.13676358"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.taskpulse.app"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
@@ -27,6 +28,7 @@ android {
         release {
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

@@ -11,17 +11,23 @@ export class ApiError extends Error {
   }
 }
 
-function corsHeaders(request: Request, env: Env): HeadersInit {
+export function corsHeaders(request: Request, env: Env): HeadersInit {
   const origin = request.headers.get("origin");
   const allowed = env.APP_ORIGIN;
-  const allowOrigin = allowed ? (origin === allowed ? allowed : "null") : "*";
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
+    ...(allowed && origin === allowed ? { "Access-Control-Allow-Origin": allowed } : {}),
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Authorization,Content-Type,Idempotency-Key,If-None-Match",
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
   };
+}
+
+export function preflightResponse(request: Request, env: Env): Response {
+  if (!env.APP_ORIGIN || request.headers.get("origin") !== env.APP_ORIGIN) {
+    return new Response(null, { status: 403 });
+  }
+  return new Response(null, { status: 204, headers: corsHeaders(request, env) });
 }
 
 export function jsonResponse(request: Request, env: Env, body: unknown, status = 200, extra?: HeadersInit): Response {
