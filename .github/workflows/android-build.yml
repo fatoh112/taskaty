@@ -178,7 +178,7 @@ jobs:
               printf '%s\n' "$badging"
               exit 1
             fi
-            if [[ "$sdk_line" != "sdkVersion:'23'" ]]; then
+            if [[ "$sdk_line" != "sdkVersion:'24'" ]]; then
               echo "Unexpected minimum Android SDK in $(basename "$apk"): $sdk_line"
               exit 1
             fi
@@ -188,7 +188,7 @@ jobs:
           Commit: $GITHUB_SHA
           Package: com.taskpulse.app
           Version: 1.0.0+1
-          Minimum Android SDK: 23 (Android 6.0)
+          Minimum Android SDK: 24 (Android 7.0)
           APKs: universal debug; universal release mode signed with the generated Android debug key
           Production release signing: not configured
           EOF
