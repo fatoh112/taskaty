@@ -27,14 +27,14 @@ on:
 
 concurrency:
   group: taskaty-android-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   verify-and-build:
-    name: Analyze, test, and build debug APK
+    name: Analyze, test, and build universal APKs
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -91,7 +91,43 @@ jobs:
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
 
-      - name: Prepare optional public app configuration
+      - name: Verify required production public app configuration
+        env:
+          TASKPULSE_API_URL: ${{ vars.TASKPULSE_API_URL }}
+          FIREBASE_API_KEY: ${{ vars.TASKPULSE_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.TASKPULSE_FIREBASE_APP_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.TASKPULSE_FIREBASE_PROJECT_ID }}
+          FIREBASE_SENDER_ID: ${{ vars.TASKPULSE_FIREBASE_SENDER_ID }}
+        run: |
+          node <<'NODE'
+          const required = [
+            'TASKPULSE_API_URL',
+            'FIREBASE_API_KEY',
+            'FIREBASE_APP_ID',
+            'FIREBASE_PROJECT_ID',
+            'FIREBASE_SENDER_ID',
+          ];
+          const missing = required.filter((key) => !process.env[key]);
+          if (missing.length) {
+            console.error(`Missing required repository variables: ${missing.join(', ')}`);
+            process.exit(1);
+          }
+          const expected = {
+            TASKPULSE_API_URL: 'https://taskpulse-api.sultan-food-internal.workers.dev',
+            FIREBASE_APP_ID: '1:476661033523:android:69e319439b3b5b6a351146',
+            FIREBASE_PROJECT_ID: 'taskaty-d3042',
+            FIREBASE_SENDER_ID: '476661033523',
+          };
+          for (const [key, value] of Object.entries(expected)) {
+            if (process.env[key] !== value) {
+              console.error(`Repository variable ${key} does not match the existing Taskaty production configuration.`);
+              process.exit(1);
+            }
+          }
+          console.log('All required Android Firebase and HTTPS Worker settings are present and match Taskaty.');
+          NODE
+
+      - name: Prepare public app configuration
         env:
           TASKPULSE_API_URL: ${{ vars.TASKPULSE_API_URL }}
           FIREBASE_API_KEY: ${{ vars.TASKPULSE_FIREBASE_API_KEY }}
@@ -104,11 +140,11 @@ jobs:
           const fs = require('node:fs');
           const path = `${process.env.RUNNER_TEMP}/taskaty-dart-defines.json`;
           const config = {
-            TASKPULSE_API_URL: process.env.TASKPULSE_API_URL || '',
-            FIREBASE_API_KEY: process.env.FIREBASE_API_KEY || '',
-            FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || '',
-            FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
-            FIREBASE_SENDER_ID: process.env.FIREBASE_SENDER_ID || '',
+            TASKPULSE_API_URL: process.env.TASKPULSE_API_URL,
+            FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
+            FIREBASE_APP_ID: process.env.FIREBASE_APP_ID,
+            FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+            FIREBASE_SENDER_ID: process.env.FIREBASE_SENDER_ID,
           };
           fs.writeFileSync(path, JSON.stringify(config), { mode: 0o600 });
           NODE
@@ -117,13 +153,40 @@ jobs:
         working-directory: apps/android
         run: flutter build apk --debug --dart-define-from-file="$RUNNER_TEMP/taskaty-dart-defines.json"
 
-      - name: Confirm APK exists
-        run: test -s apps/android/build/app/outputs/flutter-apk/app-debug.apk
+      - name: Build release-mode APK
+        working-directory: apps/android
+        run: flutter build apk --release --dart-define-from-file="$RUNNER_TEMP/taskaty-dart-defines.json"
 
-      - name: Upload debug APK
+      - name: Validate APKs and prepare checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/taskaty-artifacts"
+          mkdir -p "$output"
+          cp apps/android/build/app/outputs/flutter-apk/app-debug.apk "$output/taskaty-android-debug.apk"
+          cp apps/android/build/app/outputs/flutter-apk/app-release.apk "$output/taskaty-android-release-debug-signed.apk"
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          for apk in "$output/taskaty-android-debug.apk" "$output/taskaty-android-release-debug-signed.apk"; do
+            test -s "$apk"
+            "$build_tools/apksigner" verify --verbose "$apk"
+            badging=$("$build_tools/aapt" dump badging "$apk")
+            grep -Fq "name='com.taskpulse.app'" <<<"$badging"
+            grep -Fq "sdkVersion:'23'" <<<"$badging"
+          done
+          cat > "$output/BUILD_INFO.txt" <<EOF
+          Commit: $GITHUB_SHA
+          Package: com.taskpulse.app
+          Version: 1.0.0+1
+          Minimum Android SDK: 23 (Android 6.0)
+          APKs: universal debug; universal release mode signed with the generated Android debug key
+          Production release signing: not configured
+          EOF
+          (cd "$output" && sha256sum taskaty-android-debug.apk taskaty-android-release-debug-signed.apk > SHA256SUMS.txt)
+
+      - name: Upload Android APKs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: taskaty-debug-apk-${{ github.run_number }}
-          path: apps/android/build/app/outputs/flutter-apk/app-debug.apk
+          name: taskaty-android-full-apk-${{ github.run_number }}
+          path: ${{ runner.temp }}/taskaty-artifacts/*
           if-no-files-found: error
           retention-days: 3
