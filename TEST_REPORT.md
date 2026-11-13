@@ -31,6 +31,7 @@ Tests used two existing, real Firebase email/password accounts on the registered
 | Local Web launcher configuration | PASS | `scripts/run-web.ps1 -ConfigureOnly` exited 0 and generated only the ignored local public-config file and Firebase messaging service worker. |
 | Worker typecheck | PASS | `npm run typecheck` exited 0. |
 | Worker tests | PASS | `npm test`: 5 files, 20 tests passed, including exact-origin preflight, rejected foreign origins, and CORS on authenticated API errors. |
+| Automatic Android CI for this push | CANCELLED before APK | GitHub queued [run #43415666260](https://github.com/fatoh112/taskaty/actions/runs/43415666260); it was cancelled during Flutter setup under the Web-only no-APK instruction. The APK build and upload steps were skipped. The local checks above were run directly and passed. |
 
 The two disposable QA Firebase accounts were deleted after real password reauthentication. Their two exact QA teams were removed from D1; cascading cleanup removed invitations, tasks, activity, and notifications. QA-specific API rate-limit buckets and local app/Firebase action-site data in both disposable browser profiles were also cleared. A read-only follow-up query returned zero QA team, user, task, notification, activity, invitation, device-token, and rate-limit rows. The owner's personal Firebase account and unrelated production data were not changed.
 
