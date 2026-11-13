@@ -168,10 +168,21 @@ jobs:
           build_tools="$ANDROID_HOME/build-tools/36.0.0"
           for apk in "$output/taskaty-android-debug.apk" "$output/taskaty-android-release-debug-signed.apk"; do
             test -s "$apk"
+            echo "Checking $(basename "$apk") signature and package metadata"
             "$build_tools/apksigner" verify --verbose "$apk"
             badging=$("$build_tools/aapt" dump badging "$apk")
-            grep -Fq "name='com.taskpulse.app'" <<<"$badging"
-            grep -Fq "sdkVersion:'23'" <<<"$badging"
+            package_line=$(grep -m1 '^package:' <<<"$badging" || true)
+            sdk_line=$(grep -m1 '^sdkVersion:' <<<"$badging" || true)
+            if [[ "$package_line" != *"name='com.taskpulse.app'"* || -z "$sdk_line" ]]; then
+              echo "Could not read the expected package and minimum SDK from APK metadata."
+              printf '%s\n' "$badging"
+              exit 1
+            fi
+            if [[ "$sdk_line" != "sdkVersion:'23'" ]]; then
+              echo "Unexpected minimum Android SDK in $(basename "$apk"): $sdk_line"
+              exit 1
+            fi
+            printf '%s: %s; %s\n' "$(basename "$apk")" "$package_line" "$sdk_line"
           done
           cat > "$output/BUILD_INFO.txt" <<EOF
           Commit: $GITHUB_SHA
